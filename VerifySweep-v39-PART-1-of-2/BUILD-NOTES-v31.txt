@@ -1,0 +1,8 @@
+VerifySweep v31
+- Stronger visual audience identity on Homeowner Center and Professional Center headers.
+- Added HOMEOWNERS / PROFESSIONALS badge beside VerifySweep brand.
+- Audience bars now use subtle distinct center accents while retaining VerifySweep branding.
+- Homepage now contains a prominent two-door Choose Your VerifySweep Center section.
+- Homeowner route: verify individual, credentials, hiring information.
+- Professional route: investigation, Website & SEO, education.
+- Preserved switch links between centers and existing functionality.

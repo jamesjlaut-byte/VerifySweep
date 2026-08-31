@@ -1,0 +1,14 @@
+VerifySweep v38 — Homeowner Verification + Find-a-Pro
+
+- Added interactive Quick Credential Check to verify-chimney-sweep.html.
+  - User enters the individual technician name and selects claimed credential issuer.
+  - Routes to official CSIA, NFI, F.I.R.E., or NCSG/CCP verification resource.
+  - Input stays client-side and is not submitted to VerifySweep.
+- Added NCSG/CCP official verification route alongside CSIA/NFI/F.I.R.E.
+- Reworked Find-a-Pro hero around individual professional verification.
+- Reworked directory result cards so professional name is primary, company secondary.
+- Added explicit VerifySweep reviewed-record label.
+- Added verified_at field to directory schema and API output for source-check dating.
+- Expanded official source fallback links to CSIA, NFI, F.I.R.E., NCSG/CCP.
+- Directory remains verified-only; pending submissions never appear to homeowners.
+- Validation: 97 HTML pages; 0 missing internal references; Python APIs compile; modified JS passes node --check.
