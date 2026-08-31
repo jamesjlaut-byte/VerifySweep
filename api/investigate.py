@@ -78,6 +78,22 @@ def analyze(c):
     related=list_clean(c.get('related_entities'))
     relationship_notes=clean(c.get('relationship_notes'))
     evidence_notes=clean(c.get('evidence_notes'))
+    raw_evidence_items=c.get('evidence_items') if isinstance(c.get('evidence_items'),list) else []
+    evidence_items=[]
+    allowed_types={'google_profile','website','credential','business_record','screenshot','other'}
+    allowed_status={'unreviewed','reporter_observed','independently_verified','disputed'}
+    for item in raw_evidence_items[:60]:
+        if not isinstance(item,dict): continue
+        ev={
+          'url':clean(item.get('url'),1200),
+          'capture_date':clean(item.get('capture_date'),40),
+          'type':clean(item.get('type'),60),
+          'status':clean(item.get('status'),60),
+          'note':clean(item.get('note'),3000)
+        }
+        if ev['type'] not in allowed_types: ev['type']='other'
+        if ev['status'] not in allowed_status: ev['status']='unreviewed'
+        if ev['url'] or ev['note']: evidence_items.append(ev)
     chronology_notes=clean(c.get('chronology_notes'))
     unresolved_questions=clean(c.get('unresolved_questions'))
     policy_notes=clean(c.get('policy_notes'))
@@ -108,7 +124,18 @@ def analyze(c):
     evidence=[]
     if verified: evidence.append({'class':'reporter-verified observation','text':verified,'confidence':'reported as personally checked'})
     if observed: evidence.append({'class':'reporter observation','text':observed,'confidence':'reported observation; verify independently'})
-    for u in links: evidence.append({'class':'source URL','text':u,'confidence':'source supplied; content must be reviewed'})
+    structured_urls={x.get('url') for x in evidence_items if x.get('url')}
+    for u in links:
+        if u not in structured_urls: evidence.append({'class':'source URL','text':u,'confidence':'source supplied; content must be reviewed'})
+    for item in evidence_items:
+        label={
+          'independently_verified':'independently verified source item',
+          'reporter_observed':'reporter-observed source item',
+          'disputed':'disputed/conflicting source item',
+          'unreviewed':'unreviewed source item'
+        }.get(item['status'],'unreviewed source item')
+        desc=item['note'] or item['url'] or 'Evidence item supplied.'
+        evidence.append({'class':label,'text':desc,'confidence':item['status'].replace('_',' '),'source_url':item['url'],'capture_date':item['capture_date'],'evidence_type':item['type']})
     if suspicions: evidence.append({'class':'unverified theory','text':suspicions,'confidence':'do not present as fact'})
     if evidence_notes: evidence.append({'class':'investigator evidence notes','text':evidence_notes,'confidence':'working notes; verify each factual statement against its source'})
 
@@ -131,7 +158,13 @@ def analyze(c):
         policy.append({'topic':'Investigator policy notes','analysis':policy_notes,'status':'working note — compare against current official source before filing','official_sources':[OFFICIAL_POLICY_SOURCES['eligibility'],OFFICIAL_POLICY_SOURCES['representation']]})
 
     verified_text=verified or 'No independently verified facts were entered in the case.'
-    source_text='\n'.join(f'{i+1}. {u}' for i,u in enumerate(links)) or 'No source URLs supplied.'
+    source_lines=[f'{i+1}. {u}' for i,u in enumerate(links) if u not in structured_urls]
+    offset=len(source_lines)
+    for i,item in enumerate(evidence_items):
+        detail=item['url'] or '[no URL]'
+        meta=', '.join(x for x in [item['type'].replace('_',' '), item['capture_date'], item['status'].replace('_',' ')] if x)
+        source_lines.append(f'{offset+i+1}. {detail}' + (f' — {meta}' if meta else '') + (f' — {item["note"]}' if item['note'] else ''))
+    source_text='\n'.join(source_lines) or 'No source URLs supplied.'
     concerns_text=', '.join(POLICIES.get(x,(x,''))[0] for x in concerns) or 'No concern category selected.'
     complaint=(f"Subject: Request for Google Business Profile review — {business}\n\n"
                f"Business/listing: {business}\nLocation: {city or 'Not provided'}\nGoogle profile: {maps or 'Not provided'}\nWebsite: {website or 'Not provided'}\nPhone: {phone or 'Not provided'}\n\n"
@@ -142,7 +175,8 @@ def analyze(c):
                "This package identifies potential concerns and supporting sources; it does not assert that Google must remove the profile. Google makes the enforcement decision.")
 
     completeness=0
-    for present in [bool(maps),bool(website),bool(phone),bool(verified),bool(observed),bool(links),bool(concerns)]: completeness+=1 if present else 0
+    source_present=bool(links or evidence_items)
+    for present in [bool(maps),bool(website),bool(phone),bool(verified),bool(observed),source_present,bool(concerns)]: completeness+=1 if present else 0
     completeness=round(completeness/7*100)
 
     # Give the professional a concrete investigation order instead of a generic score.
@@ -172,21 +206,43 @@ def analyze(c):
 
     # Evidence-strength summary helps the investigator distinguish preserved facts from leads and theories.
     strength={
-      'strong': sum(1 for x in evidence if x.get('class')=='reporter-verified observation') + (1 if len(links)>=2 else 0),
-      'supporting': sum(1 for x in evidence if x.get('class') in ('source URL','reporter observation')),
+      'strong': sum(1 for x in evidence if x.get('class')=='reporter-verified observation') + (1 if len(links)>=2 else 0) + sum(1 for x in evidence_items if x.get('status')=='independently_verified'),
+      'supporting': sum(1 for x in evidence if x.get('class') in ('source URL','reporter observation','reporter-observed source item')),
       'unverified': sum(1 for x in evidence if x.get('class')=='unverified theory') + sum(1 for x in signals if x.get('status')=='needs verification')
     }
     evidence_status='developing'
-    if strength['strong']>=2 and len(links)>=2 and verified: evidence_status='strong starting package'
-    elif not verified or not links: evidence_status='insufficient for filing'
+    source_count=len(set(links+[x.get('url','') for x in evidence_items if x.get('url')]))
+    if strength['strong']>=2 and source_count>=2 and verified: evidence_status='strong starting package'
+    elif not verified or source_count==0: evidence_status='insufficient for filing'
 
     gaps=[]
     if not maps:gaps.append('Add the exact Google Maps / Business Profile URL.')
-    if not links:gaps.append('Add source URLs and preserve screenshots with dates.')
+    if not links and not evidence_items:gaps.append('Add source URLs and preserve screenshots with dates.')
     if not verified:gaps.append('Separate at least one independently checked fact from suspicion.')
     if suspicions:gaps.append('Keep the unverified theory internal until independently supported.')
     if not phone:gaps.append('Add the public phone number if phone routing is part of the concern.')
     if not website:gaps.append('Add the public website if site identity or routing is relevant.')
+
+    # Filing readiness is deliberately stricter than intake completeness. A generated draft is not a finding.
+    verified_structured=sum(1 for x in evidence_items if x.get('status')=='independently_verified')
+    policy_human_review=bool(c.get('policy_human_review'))
+    human_approved=bool(c.get('human_approved'))
+    filing_checks=[
+      {'key':'profile_identified','label':'Exact Google profile identified','passed':bool(maps)},
+      {'key':'verified_fact','label':'At least one independently checked fact recorded','passed':bool(verified or verified_structured)},
+      {'key':'supporting_sources','label':'At least two independently checkable source URLs preserved','passed':source_count>=2},
+      {'key':'policy_review','label':'Current official Google policy reviewed by a human','passed':policy_human_review},
+      {'key':'human_review','label':'Final evidence package reviewed by a human','passed':human_approved},
+    ]
+    filing_ready=all(x['passed'] for x in filing_checks)
+    filing_readiness={
+      'ready':filing_ready,
+      'status':'human-reviewed package ready for filing consideration' if filing_ready else 'not ready for filing',
+      'checks':filing_checks,
+      'passed':sum(1 for x in filing_checks if x['passed']),
+      'total':len(filing_checks),
+      'note':'Ready means the VerifySweep review gates are complete. It does not mean the reported business violated policy or that Google will take action.'
+    }
 
     return {
       'engine':'VerifySweep Investigation Engine v1',
@@ -205,6 +261,7 @@ def analyze(c):
       'gaps':gaps,
       'investigation_plan':investigation_plan,
       'filing_route':route,
+      'filing_readiness':filing_readiness,
       'official_policy_sources':list(OFFICIAL_POLICY_SOURCES.values()),
       'complaint_draft':complaint,
       'disclaimer':'This automated analysis identifies potential indicators and organizes evidence. It does not determine that a company is fraudulent, does not guarantee a Google policy violation, and does not submit anything to Google. A human must verify the evidence and decide what to file.'
@@ -238,7 +295,7 @@ def ai_enhance(case, deterministic_result):
         return deterministic_result
     try:
         import urllib.request
-        safe_case={k:case.get(k) for k in ['business_name','city_state','phone','website','maps_url','concerns','verified_observations','suspicions','observed','evidence_links','related_entities','relationship_notes','evidence_notes','chronology_notes','unresolved_questions','policy_notes','reviewer_notes']}
+        safe_case={k:case.get(k) for k in ['business_name','city_state','phone','website','maps_url','concerns','verified_observations','suspicions','observed','evidence_links','evidence_items','related_entities','relationship_notes','evidence_notes','chronology_notes','unresolved_questions','policy_notes','reviewer_notes']}
         instructions=('You are VerifySweep AI, an evidence-review assistant for chimney professionals. '
           'Never declare fraud, ownership, illegality, fake credentials, or a Google policy violation unless the supplied evidence establishes it. '
           'Keep reporter allegations separate from verified facts. Identify evidence gaps and useful next verification steps. '

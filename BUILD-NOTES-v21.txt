@@ -1,0 +1,36 @@
+VerifySweep v21 build notes — 2026-08-30
+
+MOBILE HEADER / NAVIGATION
+- Fixed the homepage header bug that caused the logo and menu control to render in a large white area on mobile.
+- Added the missing site-header class everywhere a page header is used.
+- Normalized all menu controls to a three-line hamburger icon.
+- Added mobile header overrides: 64px header, compact logo/button spacing, correctly positioned mobile menu, and hamburger-to-X animation when open.
+- Applied the fix across all VerifySweep pages that use the menu button, not just the homepage.
+
+CONNECTED INVESTIGATION WORKFLOW
+- Evidence AI now supports a structured evidence inventory in addition to quick source URLs.
+- Each evidence item can store: source URL, capture date, evidence type, verification status, and a note describing exactly what the source supports.
+- Evidence statuses distinguish unreviewed, reporter-observed, independently verified, and disputed/conflicting material.
+- Structured source URLs are merged into the case source list without losing the source-specific metadata.
+- Case Review now opens the requested case from ?case=<id> instead of always falling back to the most recent draft.
+- Full Case Review links from the six AI stages now preserve the case ID.
+- Case Review displays the structured evidence inventory and includes it in readiness scoring, evidence-gap checks, complaint-support drafts, and case exports.
+
+INVESTIGATION ENGINE
+- /api/investigate.py now accepts and sanitizes structured evidence_items.
+- Structured items are classified separately by verification status.
+- Evidence strength can recognize independently verified structured items.
+- Complaint-support source lists now include evidence type, capture date, verification status, and source note.
+- Duplicate source URLs are avoided when a structured evidence item already represents the same URL.
+
+VALIDATION
+- Python API files compile successfully.
+- Shared investigation workspace JavaScript passes Node syntax check.
+- Case Review inline JavaScript passes Node syntax check.
+- 95 HTML pages checked for missing local links: 0 missing.
+- All page headers checked: 0 bare/unclassed headers remain.
+- All pages with menu controls checked: all use the normalized hamburger control.
+
+LIVE DEPLOYMENT NOTE
+- The connected Vercel project is verifysweep-staging and is linked to jamesjlaut-byte/VerifySweep.
+- GitHub content can be read, but the current GitHub integration returned HTTP 403 on repository writes, so these v21 changes have not been pushed to the live repository by ChatGPT.
