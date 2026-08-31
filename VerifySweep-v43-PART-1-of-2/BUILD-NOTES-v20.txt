@@ -1,0 +1,31 @@
+VerifySweep Master v20 — Connected AI Investigation + Site Audit Functionality
+Built from VerifySweep-NEW-THREAD-MASTER-v19.zip
+
+Major functional changes:
+- Six AI stage pages are now working interfaces connected to one persistent case.
+- Stage-specific case inputs carry forward automatically via per-case browser storage.
+- FraudWatch, Integrity Graph, Evidence AI, CaseBuilder, PolicyCheck and ReportBuilder can each run /api/investigate against the complete connected case.
+- AI results are stored per case, fixing cross-case result leakage from the prior global result key.
+- Integrity Graph accepts relationship leads/notes while explicitly preserving uncertainty.
+- Evidence AI accepts source URLs and structured evidence notes.
+- CaseBuilder accepts chronology notes and unresolved questions.
+- PolicyCheck carries investigator notes and shows dated official Google policy sources.
+- ReportBuilder carries reviewer notes, human-review acknowledgement, complaint copy/download and Google reporting-route link.
+- /api/investigate includes current official Google policy source metadata checked 2026-08-30.
+- Homepage message tightened around “Credentials Matter. Verify Before You Hire.” and pro AI investigation.
+
+Website & SEO Checker:
+- Crawl sample increased from 12 to 18 internal pages.
+- Added internal-link isolation / low-link support checks.
+- Added credential issuer/resource-link detection.
+- Added body-text similarity screening for repetitive city pages.
+- Added chimney service-topic coverage screening.
+- Added page-level incoming/outgoing internal-link counts.
+- Added page-level chimney topic, credential, location and trust signals.
+- Downloadable report now includes city-page similarity and credential/resource links.
+
+Validation performed:
+- Python backends compile successfully.
+- Shared investigation JavaScript and page scripts pass Node syntax checks.
+- All six AI pages contain the connected workspace assets.
+- Static internal HTML link check returned zero missing local targets.
