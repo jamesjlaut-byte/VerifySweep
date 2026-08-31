@@ -1,0 +1,38 @@
+VerifySweep v24 — Evidence files + Integrity Graph
+Date: 2026-08-30
+
+This pass continues from v23 and adds working evidence-file handling to the browser prototype.
+
+Evidence AI
+- Added multi-file evidence attachment picker for images, PDFs, text and CSV files.
+- Added IndexedDB evidence storage so attached file bytes can persist in the user's browser without being forced into localStorage.
+- Added a 12 MB per-file browser-prototype limit.
+- Added attachment manifest fields: attachment ID, case ID, name, MIME type, size, last-modified value and added timestamp.
+- Added Open / download and Remove controls for locally stored evidence files.
+- Attached files are scoped to the current VerifySweep case.
+- File bytes are NOT uploaded to VerifySweep and are NOT sent to the AI endpoint in this prototype.
+- The case carries only attachment metadata into the evidence analysis, keeping the file-content boundary explicit.
+
+Integrity Graph
+- Structured relationship leads with identifier type, value, possible related business/listing, source URL, status and note.
+- Visual case-to-lead relationship graph preview.
+- Independently verified identifier matches remain identifier matches only; VerifySweep does not infer common ownership or fraud from a match.
+- Disputed relationships remain visibly disputed.
+
+Case Review
+- Added Integrity Graph Inventory.
+- Added local evidence attachment manifest.
+- Corrected initial quality label to “Intake completeness.”
+
+Backend
+- /api/investigate accepts relationship_items and evidence_attachments metadata.
+- Relationship items are sanitized and included in Integrity Graph analysis.
+- Attachment metadata is classified as local attachment metadata; file contents are explicitly described as not analyzed.
+- Live AI safe-case payload can receive relationship_items and attachment metadata, never local file bytes.
+
+Validation
+- All Python API files compile.
+- investigation-workspace.js passes node syntax validation.
+- evidence-store.js passes node syntax validation.
+- Case Review executable scripts pass node syntax validation.
+- Static internal reference check reports zero missing local assets/pages.

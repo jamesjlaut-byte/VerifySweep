@@ -1,0 +1,25 @@
+VerifySweep v25 — Structured CaseBuilder chronology
+Date: 2026-08-30
+
+New in v25
+- CaseBuilder AI now supports structured chronology events instead of relying only on a free-text chronology box.
+- Each chronology event can record date, event, supporting source URL, verification status, and detail.
+- Structured chronology events persist with the connected case.
+- /api/investigate now sanitizes timeline_items and includes them in the CaseBuilder timeline output.
+- Timeline events preserve verification status and supporting source reference.
+- Full Case Review now shows the structured case chronology before or after an AI run.
+
+Carried forward from v24
+- Browser-persistent evidence file attachments via IndexedDB.
+- Local attachment manifest scoped to case.
+- Files are not uploaded or sent to AI in the prototype.
+- Structured Integrity Graph relationship leads and visual graph preview.
+- Integrity Graph inventory in Case Review.
+
+Validation
+- All api/*.py files compile.
+- investigation-workspace.js passes node --check.
+- evidence-store.js passes node --check.
+- Case Review executable scripts pass node --check.
+- Internal local asset/page reference check reports zero missing references.
+- Structured CaseBuilder event tested against /api/investigate analysis function and returned the expected dated timeline item.
