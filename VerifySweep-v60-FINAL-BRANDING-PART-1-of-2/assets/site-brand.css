@@ -1,0 +1,66 @@
+:root{--vs-orange:#f36b10;--vs-orange-hi:#ff8324;--vs-orange-text:#9b3f00;--vs-black:#07090a;--vs-charcoal:#11171b;--vs-paper:#fff;--vs-soft:#f5f5f3;--vs-line:#dedbd8}
+html body{background:var(--vs-soft)!important;color:#171717}
+header.site-header{min-height:74px!important;height:auto!important;background:var(--vs-black)!important;border-bottom:1px solid #2e2e2e!important;box-shadow:0 5px 20px rgba(0,0,0,.16)!important;padding:10px 5%!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:18px!important;position:sticky!important;top:0!important;z-index:30!important}
+.vsBrand{display:flex!important;align-items:center!important;gap:12px!important;min-width:0!important;text-decoration:none!important;color:#fff!important;padding:0!important;position:relative!important}
+.vsBrand img{display:block!important;width:198px!important;max-width:44vw!important;height:auto!important;object-fit:contain!important;flex:0 1 auto!important}
+.vsBrandMeta{display:flex;align-items:center;gap:10px;min-width:0}.vsBrandTag{display:block!important;color:#cfd4d7!important;font-size:9px!important;line-height:1.15!important;letter-spacing:.16em!important;font-weight:850!important;text-transform:uppercase!important;white-space:nowrap!important;margin:0!important}
+.vsAudienceBadge{display:inline-flex;align-items:center;min-height:25px;padding:5px 8px;border:1px solid rgba(243,107,16,.72);border-radius:999px;color:#ff8324;font-size:9px;font-weight:900;letter-spacing:.11em;white-space:nowrap;text-transform:uppercase}
+.menuBtn{border-color:#565d61!important;color:#fff!important;background:transparent!important}.menu{background:#0c1013!important;border-color:#343a3e!important}.menu a{color:#fff!important}.menu a:hover{background:#1a2024!important}.menu small{color:#b8c0c5!important}.menuGroup>b{color:#ff8324!important}
+.hero,.heroBand,.pageHero,.dark{background-color:var(--vs-charcoal)!important}.hero{color:#fff!important;border-bottom:4px solid var(--vs-orange)!important}.hero .ey,.hero .eyebrow,.hero .kicker,.hero .section-label{color:#ff8324!important}
+a{text-decoration-color:rgba(243,107,16,.35)}
+main a:not(.btn):not(.button):not(.cta):not(.vsAudienceSwitch){color:var(--vs-orange-text)}
+.btn,.button,button.primary,input[type=submit],.login{background:var(--vs-orange)!important;border-color:var(--vs-orange)!important;color:var(--vs-black)!important}.btn:hover,.button:hover,button.primary:hover{background:var(--vs-orange-hi)!important;color:var(--vs-black)!important}.btn.alt,.btn.ghost,.button.secondary{background:transparent!important;border-color:#70777b!important;color:inherit!important}
+.sectionbar a:hover{background:#fff1e8!important;color:var(--vs-orange-text)!important}.card,.panel,.box,.mini,.cred,.toolCard,.resourceCard,.quickcheck{border-color:var(--vs-line)!important}.aiNum,.stepNum,.number,.num,.badge-accent{background:var(--vs-orange)!important;color:#fff!important}.proof,.callout,.notice{border-left-color:var(--vs-orange)!important}
+/* Accessible orange text on light surfaces. Bright brand orange remains for dark headers/heroes and large controls. */
+.wrap .ey,.wrap .eyebrow,.wrap .kicker,.wrap .section-label,main .ey,main .eyebrow,main .kicker,main .section-label{color:var(--vs-orange-text)}
+footer{background:#080808!important;color:#b7bec2!important;border-top:3px solid var(--vs-orange)!important}footer a{color:#d7dcdf!important}
+.vsAudienceSwitch{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-height:38px!important;padding:8px 12px!important;border:1px solid rgba(243,107,16,.82)!important;border-radius:9px!important;color:#fff!important;background:transparent!important;text-decoration:none!important;font-size:11px!important;font-weight:900!important;letter-spacing:.04em!important;white-space:nowrap!important}.vsAudienceSwitch:hover{background:var(--vs-orange)!important;color:#fff!important}
+@media(max-width:760px){header.site-header{min-height:64px!important;padding:8px 16px!important}.vsBrand{gap:8px!important}.vsBrand img{width:165px!important;max-width:58vw!important}.vsBrandMeta{gap:6px}.vsBrandTag{font-size:7px!important;letter-spacing:.11em!important}.vsAudienceBadge{font-size:7px;padding:4px 6px}.menu{top:62px!important;left:14px!important;right:14px!important;min-width:0!important;max-height:calc(100vh - 76px)!important;overflow:auto!important}.vsAudienceSwitch{font-size:0!important;width:42px!important;height:40px!important;padding:0!important}.vsAudienceSwitch:after{content:'↔';font-size:19px!important;line-height:1}}
+@media(max-width:460px){.vsBrand img{width:148px!important;max-width:54vw!important}.vsBrandTag{display:none!important}.vsAudienceBadge{font-size:6px!important;padding:4px 5px!important}.menuBtn{width:42px!important;height:40px!important;flex:0 0 42px!important}}
+
+
+/* v60 FINAL BRAND SYSTEM — visual-only normalization; page copy and links remain unchanged. */
+:root{
+  --vs-orange:#f36b10!important;
+  --vs-orange-hi:#ff8324!important;
+  --vs-orange-text:#9b3f00!important;
+  --vs-black:#070707!important;
+  --vs-charcoal:#151515!important;
+  --vs-paper:#fff!important;
+  --vs-soft:#f5f5f5!important;
+  --vs-line:#dedede!important;
+  --red:#f36b10!important;--green:#f36b10!important;--amber:#f36b10!important;--gold:#f36b10!important;
+  --navy:#0b0b0b!important;--ink:#171717!important;--muted:#6d6d6d!important;--bg:#f5f5f5!important;
+}
+html,body{accent-color:var(--vs-orange)!important}
+header.site-header{background:#070707!important;border-bottom:2px solid var(--vs-orange)!important;min-height:86px!important;padding:8px 5%!important}
+header.site-header .vsBrand{min-height:68px!important;display:flex!important;align-items:center!important;gap:10px!important;overflow:visible!important}
+header.site-header .vsBrand img{content:url('/assets/VerifySweep-Official-Logo-Black.png?v=60')!important;width:222px!important;max-width:46vw!important;height:auto!important;max-height:68px!important;object-fit:contain!important;object-position:left center!important}
+/* The official logo artwork already contains CHECK • VERIFY • TRUST. Keep duplicate legacy text in the DOM but do not render it. */
+header.site-header .vsBrandTag{display:none!important}
+header.site-header .vsBrandMeta{display:flex!important;align-items:center!important;margin-left:2px!important}
+header.site-header .vsAudienceBadge{border-color:rgba(243,107,16,.82)!important;background:rgba(243,107,16,.08)!important;color:#ff8324!important}
+header.site-header .context{color:#ff8324!important;border-color:#f36b10!important}
+header.site-header .menuBtn{border-color:#5b5b5b!important;color:#fff!important;background:#111!important}
+header.site-header .menuBtn:hover{border-color:#f36b10!important}
+.menu{background:#101010!important;border-color:#3b3b3b!important}.menu a{color:#fff!important}.menu a:hover{background:#202020!important;color:#fff!important}.menu small{color:#bcbcbc!important}.menuGroup>b{color:#ff8324!important}
+.vsAudienceSwitch{border-color:#f36b10!important;color:#fff!important;background:#101010!important}.vsAudienceSwitch:hover{background:#f36b10!important;color:#070707!important}
+.sectionbar{border-color:#e2e2e2!important}.sectionbar a{color:#303030!important}.sectionbar a:hover{background:#fff1e8!important;color:#9b3f00!important}
+.hero,.heroBand,.pageHero,.dark{background-color:#151515!important}.hero{border-bottom-color:#f36b10!important}.hero .ey,.hero .eyebrow,.hero .kicker,.hero .section-label{color:#ff8324!important}
+main .ey,main .eyebrow,main .kicker,main .section-label,.wrap .ey,.wrap .eyebrow,.wrap .kicker,.wrap .section-label{color:#9b3f00!important}
+.btn,.button,button.primary,input[type=submit],.login,.cta:not(.secondary):not(.ghost):not(.alt){background:#f36b10!important;border-color:#f36b10!important;color:#080808!important}
+.btn:hover,.button:hover,button.primary:hover,input[type=submit]:hover,.cta:not(.secondary):not(.ghost):not(.alt):hover{background:#ff8324!important;color:#080808!important}
+.btn.secondary,.btn.alt,.btn.ghost,.button.secondary,.cta.secondary,.cta.ghost,.cta.alt{background:#222!important;border-color:#666!important;color:#fff!important}
+.card,.panel,.box,.mini,.cred,.toolCard,.resourceCard,.quickcheck{border-color:#dedede!important}
+.aiNum,.stepNum,.number,.num,.badge-accent{background:#f36b10!important;color:#fff!important}
+.proof,.callout,.notice{border-left-color:#f36b10!important}
+/* Remove legacy green/yellow/teal state branding while preserving status meaning through labels/text. */
+.success,.verified,.reporter,.warning,.status,.pill,.chip,.label,.tag{border-color:#f3c39f!important}
+.verified,.success{background:#fff1e8!important;color:#9b3f00!important}.reporter,.warning{background:#fff1e8!important;color:#5b2a08!important}
+#vs-trust-strip{background:#f1f1f1!important;border-color:#dedede!important}
+#vs-trust-strip a{color:#9b3f00!important}
+footer{background:#080808!important;color:#bcbcbc!important;border-top:3px solid #f36b10!important}footer a{color:#e0e0e0!important}
+::selection{background:#f36b10;color:#080808}
+:focus-visible{outline:3px solid #f36b10!important;outline-offset:2px}
+@media(max-width:760px){header.site-header{min-height:72px!important;padding:7px 14px!important}header.site-header .vsBrand{min-height:56px!important}header.site-header .vsBrand img{width:178px!important;max-width:55vw!important;max-height:56px!important}.vsAudienceBadge{font-size:7px!important;padding:4px 6px!important}.menu{top:70px!important}}
+@media(max-width:460px){header.site-header .vsBrand img{width:158px!important;max-width:52vw!important}.vsAudienceBadge{display:none!important}}
