@@ -77,7 +77,30 @@ def analyze(c):
     city=clean(c.get('city_state'),300)
     related=list_clean(c.get('related_entities'))
     relationship_notes=clean(c.get('relationship_notes'))
+    raw_relationship_items=c.get('relationship_items') if isinstance(c.get('relationship_items'),list) else []
+    relationship_items=[]
+    allowed_rel_types={'phone','domain','address','business_name','email','other'}
+    allowed_rel_status={'unreviewed','reporter_observed','independently_verified','disputed'}
+    for item in raw_relationship_items[:60]:
+        if not isinstance(item,dict): continue
+        rel={
+          'type':clean(item.get('type'),60),
+          'value':clean(item.get('value'),1200),
+          'target':clean(item.get('target'),600),
+          'source_url':clean(item.get('source_url'),1200),
+          'status':clean(item.get('status'),60),
+          'note':clean(item.get('note'),3000)
+        }
+        if rel['type'] not in allowed_rel_types: rel['type']='other'
+        if rel['status'] not in allowed_rel_status: rel['status']='unreviewed'
+        if rel['value'] or rel['target'] or rel['source_url'] or rel['note']: relationship_items.append(rel)
     evidence_notes=clean(c.get('evidence_notes'))
+    raw_attachment_items=c.get('evidence_attachments') if isinstance(c.get('evidence_attachments'),list) else []
+    evidence_attachments=[]
+    for item in raw_attachment_items[:60]:
+        if not isinstance(item,dict): continue
+        att={'id':clean(item.get('id'),120),'name':clean(item.get('name'),500),'type':clean(item.get('type'),200),'size':int(item.get('size') or 0),'addedAt':clean(item.get('addedAt'),80)}
+        if att['name'] or att['id']: evidence_attachments.append(att)
     raw_evidence_items=c.get('evidence_items') if isinstance(c.get('evidence_items'),list) else []
     evidence_items=[]
     allowed_types={'google_profile','website','credential','business_record','screenshot','other'}
@@ -94,6 +117,14 @@ def analyze(c):
         if ev['type'] not in allowed_types: ev['type']='other'
         if ev['status'] not in allowed_status: ev['status']='unreviewed'
         if ev['url'] or ev['note']: evidence_items.append(ev)
+    raw_timeline_items=c.get('timeline_items') if isinstance(c.get('timeline_items'),list) else []
+    timeline_items=[]
+    allowed_timeline_status={'unreviewed','reporter_observed','independently_verified','disputed'}
+    for item in raw_timeline_items[:80]:
+        if not isinstance(item,dict): continue
+        ti={'date':clean(item.get('date'),40),'event':clean(item.get('event'),600),'source_url':clean(item.get('source_url'),1200),'status':clean(item.get('status'),60),'detail':clean(item.get('detail'),3000)}
+        if ti['status'] not in allowed_timeline_status: ti['status']='unreviewed'
+        if ti['date'] or ti['event'] or ti['source_url'] or ti['detail']: timeline_items.append(ti)
     chronology_notes=clean(c.get('chronology_notes'))
     unresolved_questions=clean(c.get('unresolved_questions'))
     policy_notes=clean(c.get('policy_notes'))
@@ -116,8 +147,17 @@ def analyze(c):
     if len(domains)>1: relationships.append({'type':'source/domain set','value':', '.join(domains[:12]),'interpretation':'These are the domains present in the case. Their presence does not establish common ownership.'})
     if phone: relationships.append({'type':'phone identifier','value':phone,'interpretation':'Check whether this number appears on other profiles, websites, ads, or business records.'})
     if city: relationships.append({'type':'claimed geography','value':city,'interpretation':'Compare the claimed service area/location with the public profile, website, and authoritative records.'})
+    structured_rel_values={x.get('target') or x.get('value') for x in relationship_items if x.get('target') or x.get('value')}
     for item in related:
-        relationships.append({'type':'reporter-supplied relationship lead','value':item,'interpretation':'Treat this as an investigative lead until the underlying identifier or source is independently verified.'})
+        if item not in structured_rel_values:
+            relationships.append({'type':'reporter-supplied relationship lead','value':item,'interpretation':'Treat this as an investigative lead until the underlying identifier or source is independently verified.'})
+    for item in relationship_items:
+        status_label=item['status'].replace('_',' ')
+        label=item['value'] or item['target'] or 'Relationship lead'
+        interpretation='Structured relationship lead. A match is not proof of common ownership or wrongdoing.'
+        if item['status']=='independently_verified': interpretation='The identifier match is marked independently verified, but the meaning of that match still requires human interpretation.'
+        elif item['status']=='disputed': interpretation='The relationship is disputed or conflicting and should not be stated as established.'
+        relationships.append({'type':f"structured {item['type']} relationship lead",'value':label,'target':item['target'],'source_url':item['source_url'],'status':status_label,'note':item['note'],'interpretation':interpretation})
     if relationship_notes:
         relationships.append({'type':'relationship working notes','value':relationship_notes,'interpretation':'Working notes are not proof. Preserve the source for each claimed connection.'})
 
@@ -138,9 +178,15 @@ def analyze(c):
         evidence.append({'class':label,'text':desc,'confidence':item['status'].replace('_',' '),'source_url':item['url'],'capture_date':item['capture_date'],'evidence_type':item['type']})
     if suspicions: evidence.append({'class':'unverified theory','text':suspicions,'confidence':'do not present as fact'})
     if evidence_notes: evidence.append({'class':'investigator evidence notes','text':evidence_notes,'confidence':'working notes; verify each factual statement against its source'})
+    for item in evidence_attachments:
+        evidence.append({'class':'local attachment metadata','text':item['name'] or item['id'],'confidence':'file stored locally in reporter browser; file contents were not sent to this analysis','attachment_type':item['type'],'attachment_size':item['size'],'added_at':item['addedAt']})
 
     timeline=[]
     if c.get('created_at'): timeline.append({'event':'Report created','when':clean(c.get('created_at'),100),'detail':'Reporter created the case.'})
+    for item in timeline_items:
+        detail=item['detail'] or 'No additional detail supplied.'
+        if item['source_url']: detail += f" Source: {item['source_url']}"
+        timeline.append({'event':item['event'] or 'Chronology event','when':item['date'] or 'date not supplied','detail':detail,'status':item['status'].replace('_',' '),'source_url':item['source_url']})
     timeline.append({'event':'Automated triage run','when':'current review','detail':f'{len(signals)} triage item(s), {len(evidence)} evidence item(s), and {len(relationships)} relationship lead(s) organized.'})
     if chronology_notes: timeline.append({'event':'Investigator chronology notes','when':'reporter supplied','detail':chronology_notes})
     if unresolved_questions: timeline.append({'event':'Unresolved questions','when':'open','detail':unresolved_questions})
@@ -295,7 +341,7 @@ def ai_enhance(case, deterministic_result):
         return deterministic_result
     try:
         import urllib.request
-        safe_case={k:case.get(k) for k in ['business_name','city_state','phone','website','maps_url','concerns','verified_observations','suspicions','observed','evidence_links','evidence_items','related_entities','relationship_notes','evidence_notes','chronology_notes','unresolved_questions','policy_notes','reviewer_notes']}
+        safe_case={k:case.get(k) for k in ['business_name','city_state','phone','website','maps_url','concerns','verified_observations','suspicions','observed','evidence_links','evidence_items','evidence_attachments','related_entities','relationship_items','relationship_notes','evidence_notes','timeline_items','chronology_notes','unresolved_questions','policy_notes','reviewer_notes']}
         instructions=('You are VerifySweep AI, an evidence-review assistant for chimney professionals. '
           'Never declare fraud, ownership, illegality, fake credentials, or a Google policy violation unless the supplied evidence establishes it. '
           'Keep reporter allegations separate from verified facts. Identify evidence gaps and useful next verification steps. '
