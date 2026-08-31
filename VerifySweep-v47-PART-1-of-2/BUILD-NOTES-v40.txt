@@ -1,0 +1,13 @@
+VerifySweep v40
+Homepage brand/content update from v39 release candidate.
+
+Homepage changes only:
+- New black / white / orange visual direction.
+- New logo tagline: CHECK • VERIFY • TRUST.
+- Simplified divided homeowner / chimney-professional layout.
+- Homeowner message emphasizes verifying the individual and recognized credentials through official sources.
+- Professional message explicitly explains AI-assisted investigation of possible fraud / lead-generation operations, evidence organization, and preparation of factual material for Google review.
+- Google enforcement responsibility remains clearly separated from VerifySweep.
+- Responsive mobile layout preserved.
+
+All other v39 pages and APIs remain intact.
