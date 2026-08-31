@@ -4,6 +4,14 @@ from urllib.parse import urlparse
 
 MAX_BODY=120000
 
+OFFICIAL_POLICY_SOURCES={
+ 'eligibility':{'title':'Google Business Profile — Overview of policies / eligibility','url':'https://support.google.com/business/answer/13762416?hl=en','source':'Google Business Profile Help','checked':'2026-08-30'},
+ 'ownership':{'title':'Google Business Profile — Business eligibility and ownership','url':'https://support.google.com/business/answer/13763036?hl=en','source':'Google Business Profile Help','checked':'2026-08-30'},
+ 'representation':{'title':'Google Business Profile — Guidelines for representing your business','url':'https://support.google.com/business/answer/3038177?hl=en','source':'Google Business Profile Help','checked':'2026-08-30'},
+ 'service_area':{'title':'Google Business Profile — Service-area and hybrid businesses','url':'https://support.google.com/business/answer/9157481?hl=en','source':'Google Business Profile Help','checked':'2026-08-30'},
+ 'redressal':{'title':'Google Business Redressal Complaint Form','url':'https://support.google.com/business/contact/business_redressal_form','source':'Google Business Profile Help','checked':'2026-08-30'}
+}
+
 POLICIES={
  'possible_lead_generation':('Business eligibility / lead generation','Google Business Profile eligibility rules may be relevant when a profile represents a lead-generation agent/company rather than an eligible customer-facing business.'),
  'questionable_location':('Business location / service-area representation','Google representation and service-area rules may be relevant when an address does not appear to represent a legitimate staffed business location.'),
@@ -40,6 +48,21 @@ def filing_route(concerns):
         return {'name':'Google review reporting guidance','url':'https://support.google.com/business/answer/4596773?hl=en','reason':'Review-specific concerns use Google review reporting tools rather than the Business Redressal form.','requires_human_filing':True}
     return {'name':'Google Maps business reporting guidance','url':'https://support.google.com/maps/answer/16109801?hl=en','reason':'Use Google’s reporting guide to select the route that matches the verified issue.','requires_human_filing':True}
 
+def policy_sources_for(concern):
+    mapping={
+      'possible_lead_generation':['eligibility','ownership'],
+      'questionable_location':['ownership','representation','service_area'],
+      'multiple_related_listings':['representation'],
+      'misleading_business_name':['representation'],
+      'impersonation':['representation'],
+      'credential_claim':['representation'],
+      'review_pattern':['representation'],
+      'routing_inconsistency':['representation'],
+      'no_in_person_contact':['eligibility','ownership'],
+      'other_policy_issue':['eligibility','representation']
+    }
+    return [OFFICIAL_POLICY_SOURCES[k] for k in mapping.get(concern,['eligibility','representation'])]
+
 def analyze(c):
     concerns=list_clean(c.get('concerns'))
     route=filing_route(concerns)
@@ -52,6 +75,13 @@ def analyze(c):
     maps=clean(c.get('maps_url'),1000)
     phone=clean(c.get('phone'),100)
     city=clean(c.get('city_state'),300)
+    related=list_clean(c.get('related_entities'))
+    relationship_notes=clean(c.get('relationship_notes'))
+    evidence_notes=clean(c.get('evidence_notes'))
+    chronology_notes=clean(c.get('chronology_notes'))
+    unresolved_questions=clean(c.get('unresolved_questions'))
+    policy_notes=clean(c.get('policy_notes'))
+    reviewer_notes=clean(c.get('reviewer_notes'))
 
     signals=[]
     if concerns:
@@ -70,25 +100,35 @@ def analyze(c):
     if len(domains)>1: relationships.append({'type':'source/domain set','value':', '.join(domains[:12]),'interpretation':'These are the domains present in the case. Their presence does not establish common ownership.'})
     if phone: relationships.append({'type':'phone identifier','value':phone,'interpretation':'Check whether this number appears on other profiles, websites, ads, or business records.'})
     if city: relationships.append({'type':'claimed geography','value':city,'interpretation':'Compare the claimed service area/location with the public profile, website, and authoritative records.'})
+    for item in related:
+        relationships.append({'type':'reporter-supplied relationship lead','value':item,'interpretation':'Treat this as an investigative lead until the underlying identifier or source is independently verified.'})
+    if relationship_notes:
+        relationships.append({'type':'relationship working notes','value':relationship_notes,'interpretation':'Working notes are not proof. Preserve the source for each claimed connection.'})
 
     evidence=[]
     if verified: evidence.append({'class':'reporter-verified observation','text':verified,'confidence':'reported as personally checked'})
     if observed: evidence.append({'class':'reporter observation','text':observed,'confidence':'reported observation; verify independently'})
     for u in links: evidence.append({'class':'source URL','text':u,'confidence':'source supplied; content must be reviewed'})
     if suspicions: evidence.append({'class':'unverified theory','text':suspicions,'confidence':'do not present as fact'})
+    if evidence_notes: evidence.append({'class':'investigator evidence notes','text':evidence_notes,'confidence':'working notes; verify each factual statement against its source'})
 
     timeline=[]
     if c.get('created_at'): timeline.append({'event':'Report created','when':clean(c.get('created_at'),100),'detail':'Reporter created the case.'})
     timeline.append({'event':'Automated triage run','when':'current review','detail':f'{len(signals)} triage item(s), {len(evidence)} evidence item(s), and {len(relationships)} relationship lead(s) organized.'})
+    if chronology_notes: timeline.append({'event':'Investigator chronology notes','when':'reporter supplied','detail':chronology_notes})
+    if unresolved_questions: timeline.append({'event':'Unresolved questions','when':'open','detail':unresolved_questions})
 
     policy=[]
     seen=set()
     for x in concerns:
         title,desc=POLICIES.get(x,(x,'Requires manual policy review.'))
         if title not in seen:
-            policy.append({'topic':title,'analysis':desc,'status':'potentially relevant — human review required'})
+            policy.append({'topic':title,'analysis':desc,'status':'potentially relevant — human review required','official_sources':policy_sources_for(x)})
             seen.add(title)
-    if not policy: policy.append({'topic':'Policy selection pending','analysis':'No concern category was selected. Review verified facts before choosing a Google policy theory.','status':'human review required'})
+    if not policy: policy.append({'topic':'Policy selection pending','analysis':'No concern category was selected. Review verified facts before choosing a Google policy theory.','status':'human review required','official_sources':[OFFICIAL_POLICY_SOURCES['eligibility'],OFFICIAL_POLICY_SOURCES['representation']]})
+
+    if policy_notes:
+        policy.append({'topic':'Investigator policy notes','analysis':policy_notes,'status':'working note — compare against current official source before filing','official_sources':[OFFICIAL_POLICY_SOURCES['eligibility'],OFFICIAL_POLICY_SOURCES['representation']]})
 
     verified_text=verified or 'No independently verified facts were entered in the case.'
     source_text='\n'.join(f'{i+1}. {u}' for i,u in enumerate(links)) or 'No source URLs supplied.'
@@ -97,12 +137,49 @@ def analyze(c):
                f"Business/listing: {business}\nLocation: {city or 'Not provided'}\nGoogle profile: {maps or 'Not provided'}\nWebsite: {website or 'Not provided'}\nPhone: {phone or 'Not provided'}\n\n"
                f"Potential policy area(s): {concerns_text}\n\nVerified / personally checked facts supplied by reporter:\n{verified_text}\n\n"
                f"Observed issue:\n{observed or 'No observation narrative supplied.'}\n\nSupporting sources:\n{source_text}\n\n"
-               "Requested action:\nPlease review the profile against the applicable Google Business Profile eligibility and representation policies. "
+               + (f"Reviewer notes (internal — remove unsupported material before filing):\n{reviewer_notes}\n\n" if reviewer_notes else '')
+               + "Requested action:\nPlease review the profile against the applicable Google Business Profile eligibility and representation policies. "
                "This package identifies potential concerns and supporting sources; it does not assert that Google must remove the profile. Google makes the enforcement decision.")
 
     completeness=0
     for present in [bool(maps),bool(website),bool(phone),bool(verified),bool(observed),bool(links),bool(concerns)]: completeness+=1 if present else 0
     completeness=round(completeness/7*100)
+
+    # Give the professional a concrete investigation order instead of a generic score.
+    investigation_plan=[]
+    def add_step(priority, action, why, stage):
+        investigation_plan.append({'priority':priority,'action':action,'why':why,'stage':stage})
+    if maps:
+        add_step('high','Preserve the exact Google Business Profile','Capture the live profile URL, business name, category, address/service area, phone, website and dated screenshots before anything changes.','FraudWatch AI')
+    else:
+        add_step('high','Locate and preserve the exact Google Business Profile','The complaint needs to identify the specific listing being reviewed.','FraudWatch AI')
+    if phone:
+        add_step('high','Cross-check the public phone number','Search the same number across other listings and websites. Record matches as relationship leads, not proof of common ownership.','Integrity Graph')
+    if website:
+        add_step('high','Compare the website identity with the Google profile','Check business name, domain, phone, location claims, contact forms and where customer leads are routed.','Integrity Graph')
+    if 'credential_claim' in concerns:
+        add_step('high','Verify the claimed credential with the issuing organization','Record the named credential holder, credential type, issuer and authoritative verification result.','Evidence AI')
+    if 'questionable_location' in concerns:
+        add_step('high','Verify the claimed business location','Compare the profile with authoritative public information and document only what can be independently supported.','Evidence AI')
+    if 'multiple_related_listings' in concerns:
+        add_step('medium','Build a listing relationship table','Compare names, phones, domains, addresses and routing across each suspected related profile. Shared identifiers are leads requiring review.','Integrity Graph')
+    if 'review_pattern' in concerns:
+        add_step('medium','Preserve the review pattern without alleging fake reviews','Capture dates and observable patterns. Use Google’s review-reporting process for review-specific concerns.','Evidence AI')
+    if len(links)<2:
+        add_step('high','Add independent supporting sources','A stronger complaint package should rely on independently checkable evidence rather than one observation or theory.','CaseBuilder AI')
+    add_step('medium','Compare verified facts with the applicable Google policy','Only map policy after the underlying facts are documented.','PolicyCheck AI')
+    add_step('final','Human-review the complaint package before filing','Remove unsupported conclusions, attach the strongest evidence, and submit through the Google route that matches the verified issue.','ReportBuilder AI')
+
+    # Evidence-strength summary helps the investigator distinguish preserved facts from leads and theories.
+    strength={
+      'strong': sum(1 for x in evidence if x.get('class')=='reporter-verified observation') + (1 if len(links)>=2 else 0),
+      'supporting': sum(1 for x in evidence if x.get('class') in ('source URL','reporter observation')),
+      'unverified': sum(1 for x in evidence if x.get('class')=='unverified theory') + sum(1 for x in signals if x.get('status')=='needs verification')
+    }
+    evidence_status='developing'
+    if strength['strong']>=2 and len(links)>=2 and verified: evidence_status='strong starting package'
+    elif not verified or not links: evidence_status='insufficient for filing'
+
     gaps=[]
     if not maps:gaps.append('Add the exact Google Maps / Business Profile URL.')
     if not links:gaps.append('Add source URLs and preserve screenshots with dates.')
@@ -123,8 +200,12 @@ def analyze(c):
         {'name':'PolicyCheck AI','status':'complete','summary':f'Mapped the case to {len(policy)} potentially relevant policy topic(s).','items':policy},
         {'name':'ReportBuilder AI','status':'complete','summary':'Prepared a Google complaint-support draft for human review.','items':[{'type':'complaint draft','text':complaint}]}
       ],
+      'evidence_strength':strength,
+      'evidence_status':evidence_status,
       'gaps':gaps,
+      'investigation_plan':investigation_plan,
       'filing_route':route,
+      'official_policy_sources':list(OFFICIAL_POLICY_SOURCES.values()),
       'complaint_draft':complaint,
       'disclaimer':'This automated analysis identifies potential indicators and organizes evidence. It does not determine that a company is fraudulent, does not guarantee a Google policy violation, and does not submit anything to Google. A human must verify the evidence and decide what to file.'
     }
@@ -139,7 +220,12 @@ class handler(BaseHTTPRequestHandler):
             if n<2 or n>MAX_BODY: raise ValueError('Invalid request size.')
             c=json.loads(self.rfile.read(n).decode())
             if not isinstance(c,dict): raise ValueError('Case data is required.')
-            self.sendj(200,ai_enhance(c,analyze(c)))
+            result=ai_enhance(c,analyze(c))
+            focus=clean(c.get('stage'),80)
+            if focus:
+                match=next((x for x in result.get('stages',[]) if x.get('name','').lower().replace(' ','-').replace('ai','').strip('-') in focus.lower() or focus.lower() in x.get('name','').lower()),None)
+                if match: result['focused_stage']=match
+            self.sendj(200,result)
         except (ValueError,json.JSONDecodeError) as e:self.sendj(400,{'error':str(e)})
         except Exception:self.sendj(500,{'error':'The investigation could not be completed.'})
 
@@ -152,7 +238,7 @@ def ai_enhance(case, deterministic_result):
         return deterministic_result
     try:
         import urllib.request
-        safe_case={k:case.get(k) for k in ['business_name','city_state','phone','website','maps_url','concerns','verified_observations','suspicions','observed','evidence_links']}
+        safe_case={k:case.get(k) for k in ['business_name','city_state','phone','website','maps_url','concerns','verified_observations','suspicions','observed','evidence_links','related_entities','relationship_notes','evidence_notes','chronology_notes','unresolved_questions','policy_notes','reviewer_notes']}
         instructions=('You are VerifySweep AI, an evidence-review assistant for chimney professionals. '
           'Never declare fraud, ownership, illegality, fake credentials, or a Google policy violation unless the supplied evidence establishes it. '
           'Keep reporter allegations separate from verified facts. Identify evidence gaps and useful next verification steps. '

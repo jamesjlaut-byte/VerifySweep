@@ -7,9 +7,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json, re, socket, ipaddress
 
 MAX_BYTES = 1_250_000
-MAX_PAGES = 6
-MAX_LINK_CHECKS = 18
-UA = 'VerifySweep-SiteAudit/1.2 (+https://www.verifysweep.com)'
+MAX_PAGES = 18
+MAX_LINK_CHECKS = 36
+MAX_EXTERNAL_CHECKS = 12
+UA = 'VerifySweep-SiteAudit/1.5 (+https://www.verifysweep.com)'
 
 class PageParser(HTMLParser):
     def __init__(self):
@@ -120,6 +121,12 @@ def jsonld_types(html):
     return sorted(set(out))
 
 
+def clean_external(base_url,href,host):
+    if not href or href.startswith(('#','mailto:','tel:','javascript:','data:')): return None
+    u=urljoin(base_url,href); u,_=urldefrag(u); p=urlparse(u)
+    if p.scheme not in ('http','https') or not p.hostname or p.hostname==host: return None
+    return u
+
 def clean_internal(base_url,href,host):
     if not href or href.startswith(('#','mailto:','tel:','javascript:','data:')): return None
     u=urljoin(base_url,href); u,_=urldefrag(u); p=urlparse(u)
@@ -147,9 +154,11 @@ def analyze_page(url,status,html):
     if 'noindex' in robots: issues.append('Noindex')
     if not canonical: issues.append('Missing canonical')
     if words<200: issues.append('Thin content')
+    visible_text=' '.join(p.text_parts)
     return {'url':url,'path':path,'status':status,'title':title,'title_length':len(title),'description':desc,'description_length':len(desc),
             'h1':p.h1,'h2_count':len(p.h2),'word_count':words,'images':len(p.images),'missing_alt':missing_alt,
-            'viewport':bool(viewport),'canonical':canonical,'robots':robots,'schema_types':types,'phones':phones,'links':p.links,'issues':issues}
+            'viewport':bool(viewport),'canonical':canonical,'robots':robots,'schema_types':types,'phones':phones,'links':p.links,'issues':issues,
+            '_text':visible_text[:30000]}
 
 
 def result_item(name,status,detail,suggestion='',priority='medium'):
@@ -187,6 +196,26 @@ def audit(raw_url):
         for href in page['links']:
             u=clean_internal(page['url'],href,host)
             if u and u not in internal_urls: internal_urls.append(u)
+    incoming={p['url']:0 for p in pages}
+    for source in pages:
+        outs=[]
+        for href in source['links']:
+            u=clean_internal(source['url'],href,host)
+            if u and u not in outs: outs.append(u)
+        source['internal_links_out']=len(outs)
+        for u in outs:
+            target=next((x['url'] for x in pages if urldefrag(x['url'])[0].rstrip('/')==urldefrag(u)[0].rstrip('/')),None)
+            if target: incoming[target]=incoming.get(target,0)+1
+    for page in pages:
+        page['internal_links_in']=incoming.get(page['url'],0)
+        txt=(page.get('_text','')+' '+page.get('title','')+' '+' '.join(page.get('h1',[]))).lower()
+        page['chimney_topics']=[t for t in ('inspection','sweep','repair','liner','fireplace','chimney') if t in txt]
+        page['credential_signal']=any(t in txt for t in ('csia','nfi certified','f.i.r.e','fire certified','certified chimney'))
+        page['location_signal']=bool(re.search(r'\b(?:tx|texas|service area|serving|austin|san antonio|houston|dallas|fort worth)\b',txt))
+        page['trust_signal']=any(t in txt for t in ('about us','contact','warranty','insured','certified','credential','privacy'))
+        if page is not home and page.get('internal_links_in',0)==0: page['issues'].append('No incoming internal link in crawl sample')
+        if page.get('word_count',0)>=200 and page.get('internal_links_out',0)<2: page['issues'].append('Low internal-link support')
+
     checked=internal_urls[:MAX_LINK_CHECKS]; broken=[]
     with ThreadPoolExecutor(max_workers=6) as ex:
         fut={ex.submit(status_check,u):u for u in checked}
@@ -196,6 +225,21 @@ def audit(raw_url):
                 st,_=f.result()
                 if st==0 or st>=400: broken.append({'url':u,'status':st})
             except Exception: broken.append({'url':u,'status':0})
+
+    external_urls=[]
+    for page in pages:
+        for href in page['links']:
+            u=clean_external(page['url'],href,host)
+            if u and u not in external_urls: external_urls.append(u)
+    external_checked=external_urls[:MAX_EXTERNAL_CHECKS]; broken_external=[]
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        fut={ex.submit(status_check,u):u for u in external_checked}
+        for f in as_completed(fut):
+            u=fut[f]
+            try:
+                st,_=f.result()
+                if st==0 or st>=400: broken_external.append({'url':u,'status':st})
+            except Exception: broken_external.append({'url':u,'status':0})
 
     titles={}; descs={}
     for p in pages:
@@ -212,7 +256,21 @@ def audit(raw_url):
     checks.append(result_item('Page titles','pass' if not missing_titles and not dup_titles else ('fail' if missing_titles else 'warn'),f'{len(pages)-missing_titles}/{len(pages)} crawled pages have titles; {len(dup_titles)} duplicate title group(s).','Give every important page a unique title built around that page’s service or location intent.' if missing_titles or dup_titles else '', 'high'))
     checks.append(result_item('Meta descriptions','pass' if not missing_desc and not dup_descs else 'warn',f'{len(pages)-missing_desc}/{len(pages)} crawled pages have descriptions; {len(dup_descs)} duplicate description group(s).','Write unique descriptions for service and city pages. Avoid copying the same description across locations.' if missing_desc or dup_descs else '', 'medium'))
     checks.append(result_item('H1 structure','pass' if bad_h1==0 else 'warn',f'{bad_h1} of {len(pages)} crawled pages do not have exactly one H1.','Use one clear page-level H1 on each indexable service, location and education page.' if bad_h1 else '', 'medium'))
+    noindex_pages=[p['url'] for p in pages if 'noindex' in (p['robots'] or '').lower()]
+    missing_canonical=sum(1 for p in pages if not p['canonical'])
+    canonical_mismatch=sum(1 for p in pages if p['canonical'] and urldefrag(urljoin(p['url'],p['canonical']))[0].rstrip('/') != urldefrag(p['url'])[0].rstrip('/'))
+    missing_viewport=sum(1 for p in pages if not p['viewport'])
+    error_pages=sum(1 for p in pages if int(p.get('status') or 0) >= 400)
+    self_canonical=sum(1 for p in pages if p['canonical'] and urldefrag(urljoin(p['url'],p['canonical']))[0].rstrip('/') == urldefrag(p['url'])[0].rstrip('/'))
+    title_length_issues=sum(1 for p in pages if p['title'] and not 30<=p['title_length']<=65)
+    desc_length_issues=sum(1 for p in pages if p['description'] and not 70<=p['description_length']<=170)
+    checks.append(result_item('Google indexability','pass' if not noindex_pages else 'fail',f'{len(noindex_pages)} crawled page(s) contain a noindex directive.','Remove noindex from pages you expect Google to index. Keep noindex only where it is intentional.' if noindex_pages else '', 'high'))
+    checks.append(result_item('Canonical URLs','pass' if missing_canonical==0 and canonical_mismatch==0 else 'warn',f'{missing_canonical} page(s) are missing a canonical; {canonical_mismatch} page(s) point to a different canonical URL.','Give indexable pages a deliberate canonical URL and investigate canonicals that point somewhere unexpected.' if missing_canonical or canonical_mismatch else '', 'high'))
+    checks.append(result_item('Mobile viewport','pass' if missing_viewport==0 else 'warn',f'{missing_viewport} crawled page(s) are missing a viewport meta tag.','Add a responsive viewport meta tag and test important pages on mobile devices.' if missing_viewport else '', 'medium'))
+    checks.append(result_item('SERP snippet lengths','pass' if title_length_issues==0 and desc_length_issues==0 else 'warn',f'{title_length_issues} title(s) and {desc_length_issues} meta description(s) fall outside VerifySweep screening ranges.','Rewrite awkwardly short or long titles/descriptions for clarity. Length is a screening heuristic, not a Google ranking rule.' if title_length_issues or desc_length_issues else '', 'low'))
     checks.append(result_item('Broken internal links','pass' if not broken else 'fail',f'Checked {len(checked)} internal URLs; found {len(broken)} possible broken link(s).','Repair or redirect broken internal links so visitors and crawlers do not hit dead ends.' if broken else '', 'high'))
+    checks.append(result_item('External link health','pass' if not broken_external else 'warn',f'Checked {len(external_checked)} external URLs; found {len(broken_external)} possible broken external link(s).','Update or remove broken credential, manufacturer, association, policy, or other outbound links so homeowners reach the intended source.' if broken_external else '', 'medium'))
+    checks.append(result_item('Crawled page status','pass' if error_pages==0 else 'fail',f'{error_pages} crawled page(s) returned an HTTP error status.','Repair, redirect, or intentionally remove erroring pages that are linked from the site.' if error_pages else '', 'high'))
     checks.append(result_item('Structured data','pass' if no_schema==0 else 'warn',f'{len(pages)-no_schema}/{len(pages)} crawled pages contain JSON-LD schema.','Use accurate LocalBusiness/Organization schema on core pages and Service/Article/FAQ schema only where the page content supports it.' if no_schema else '', 'medium'))
     checks.append(result_item('Image accessibility','pass' if alt_missing==0 else 'warn',f'{alt_missing} image(s) across crawled pages are missing an alt attribute.','Add descriptive alt text to meaningful chimney/fireplace images; decorative images should use alt="".' if alt_missing else '', 'low'))
     checks.append(result_item('Content depth','pass' if thin==0 else 'warn',f'{thin} of {len(pages)} crawled pages have fewer than 200 visible words.','Expand thin pages only with useful original content: service process, inspection scope, common problems, qualifications, service-area specifics and FAQs.' if thin else '', 'medium'))
@@ -228,16 +286,111 @@ def audit(raw_url):
     coverage=sum(1 for t in chimney_terms if t in all_text)
     checks.append(result_item('Service-topic clarity','pass' if coverage>=3 else 'warn',f'{coverage}/5 core chimney-service terms appear in crawled titles/H1s.','Make important service pages unmistakably about the exact service offered—such as chimney inspection, chimney sweep, fireplace repair, relining or dryer vent cleaning—without keyword stuffing.' if coverage<3 else '', 'medium'))
 
+    # Chimney-company specific screening. These are editorial quality checks, not claimed Google ranking factors.
+    combined=' '.join(' '.join([p['title'], ' '.join(p['h1'])]) for p in pages).lower()
+    credential_terms=['csia','nfi','f.i.r.e','fire certified','certified chimney','credential']
+    credential_hits=sum(1 for t in credential_terms if t in combined)
+    checks.append(result_item('Credential clarity','pass' if credential_hits else 'warn',
+        'Credential or certification language appears in crawled titles/H1s.' if credential_hits else 'No obvious credential language appeared in crawled titles/H1s.',
+        'If your company holds current credentials, explain them accurately and link homeowners to an official issuer verification source. Do not imply that company membership equals an individual technician certification.' if not credential_hits else '', 'medium'))
+
+    location_signals=0
+    for p in pages:
+        path=(p['path'] or '').lower(); head=(' '.join(p['h1'])+' '+p['title']).lower()
+        if any(x in path for x in ('-tx','/tx/','-texas','/locations','/service-area','/areas')) or re.search(r'\b(?:austin|san antonio|houston|dallas|fort worth|texas|tx)\b',head):
+            location_signals+=1
+    checks.append(result_item('Local service-area clarity','pass' if location_signals else 'warn',
+        f'{location_signals} crawled page(s) show an obvious location/service-area signal.' if location_signals else 'No obvious location/service-area page signal was detected in this crawl sample.',
+        'For local search, make real service areas clear with useful, original location pages where appropriate. Avoid doorway pages that merely swap city names.' if not location_signals else '', 'medium'))
+
+    call_terms=['call','schedule','appointment','request','estimate','contact','book']
+    cta_pages=sum(1 for p in pages if any(t in (' '.join(p['h1'])+' '+p['description']).lower() for t in call_terms))
+    checks.append(result_item('Customer action clarity','pass' if cta_pages>=max(1,len(pages)//3) else 'warn',
+        f'{cta_pages}/{len(pages)} crawled pages show appointment/contact intent in prominent page signals.',
+        'Make it obvious how a homeowner should contact or schedule with you, especially on service and location landing pages.' if cta_pages<max(1,len(pages)//3) else '', 'low'))
+
+    # Trust and local-business quality screens. These are practical chimney-site checks, not claimed ranking factors.
+    trust_terms=['privacy','terms','about','contact','warranty','insured','certified','credential']
+    trust_hits=sum(1 for t in trust_terms if t in ' '.join((p['path']+' '+p['title']+' '+p['description']).lower() for p in pages))
+    checks.append(result_item('Trust information','pass' if trust_hits>=3 else 'warn',
+        f'{trust_hits}/8 trust-topic signals were detected in the crawl sample.',
+        'Make ownership/contact information, qualifications, policies and other trust information easy for homeowners to find. Only state credentials, insurance or warranties that are accurate and current.' if trust_hits<3 else '', 'medium'))
+
+    # Flag suspiciously repetitive city/location pages using visible text fingerprints.
+    loc_pages=[p for p in pages if any(x in (p['path'] or '').lower() for x in ('-tx','-texas','/locations/','/service-area/','/areas/'))]
+    repetitive_locations=0
+    for i,a in enumerate(loc_pages):
+        aw=set(re.findall(r'[a-z]{4,}', (a['title']+' '+a['description']+' '+' '.join(a['h1'])).lower()))
+        for b in loc_pages[i+1:]:
+            bw=set(re.findall(r'[a-z]{4,}', (b['title']+' '+b['description']+' '+' '.join(b['h1'])).lower()))
+            if aw and bw and len(aw&bw)/max(1,len(aw|bw))>.82:
+                repetitive_locations+=1
+    checks.append(result_item('Location-page uniqueness','warn' if repetitive_locations else 'pass',
+        f'{repetitive_locations} highly similar location-page pair(s) were detected in page-level signals.' if repetitive_locations else 'No highly repetitive location-page signals were detected in the crawl sample.',
+        'Do not create city pages by only swapping place names. Add genuinely useful local service details, coverage, project context and homeowner information.' if repetitive_locations else '', 'medium'))
+
+    # Internal-link discoverability: important pages should not be isolated in the crawl sample.
+    orphan_like=[p for i,p in enumerate(pages) if i>0 and p.get('internal_links_in',0)==0]
+    low_link_pages=[p for p in pages if p.get('internal_links_out',0)<2 and p.get('word_count',0)>=200]
+    checks.append(result_item('Internal linking','pass' if not orphan_like and len(low_link_pages)<=max(1,len(pages)//4) else 'warn',
+        f'{len(orphan_like)} crawled page(s) have no incoming link from another crawled page; {len(low_link_pages)} content page(s) have fewer than 2 internal links.',
+        'Link related service, location and education pages together with useful descriptive anchors. Important pages should be reachable through the site structure, not isolated landing pages.' if orphan_like or low_link_pages else '', 'medium'))
+
+    # Official credential/resource-link screen. This does not validate a credential; it checks whether trust claims can send a homeowner to an authoritative source.
+    issuer_domains=('csia.org','nficertified.org','f-i-r-e-service.com','gotofire.com','ncsg.org')
+    issuer_links=[]
+    for u in external_urls:
+        h=(urlparse(u).hostname or '').lower().lstrip('www.')
+        if any(h==d or h.endswith('.'+d) for d in issuer_domains): issuer_links.append(u)
+    credential_text=' '.join(p.get('_text','') for p in pages).lower()
+    has_credential_claim=any(t in credential_text for t in ('csia','nfi certified','f.i.r.e','fire certified','certified chimney sweep','certified fireplace'))
+    checks.append(result_item('Credential verification links','pass' if (not has_credential_claim or issuer_links) else 'warn',
+        f'{len(issuer_links)} external link(s) to recognized credential-issuer domains were detected.' if issuer_links else ('Credential language appears, but no obvious issuer/resource link was detected.' if has_credential_claim else 'No prominent credential claim requiring an issuer link was detected in this sample.'),
+        'When you state an individual technician credential, link homeowners to the issuing organization or its official verification resource. A logo alone does not identify who holds the credential.' if has_credential_claim and not issuer_links else '', 'medium'))
+
+    # Better repetitive-location screening using visible body text, with place-like tokens normalized.
+    def fingerprint(text):
+        words=[w for w in re.findall(r'[a-z]{4,}',text.lower()) if w not in {'chimney','fireplace','sweep','sweeps','inspection','repair','service','services','texas','company','homeowners'}]
+        return set(words[:1200])
+    probable_city=[]
+    for p in pages:
+        path=(p.get('path') or '').lower(); text=(p.get('title','')+' '+(p.get('h1') or [''])[0]).lower()
+        if any(x in path for x in ('-tx','-texas','/locations/','/service-area/','/areas/','/city/')) or re.search(r'\b(?:tx|texas)\b',text): probable_city.append(p)
+    near_dupes=[]
+    for i,a in enumerate(probable_city):
+        af=fingerprint(a.get('_text',''))
+        for b in probable_city[i+1:]:
+            bf=fingerprint(b.get('_text',''))
+            if len(af)>=40 and len(bf)>=40:
+                sim=len(af&bf)/max(1,len(af|bf))
+                if sim>=.72: near_dupes.append({'page_a':a['url'],'page_b':b['url'],'similarity':round(sim*100)})
+    checks.append(result_item('City-page body uniqueness','warn' if near_dupes else 'pass',
+        f'{len(near_dupes)} location-page pair(s) are highly similar by visible-body-text fingerprint.' if near_dupes else 'No highly similar city-page body-text pairs were detected in the crawl sample.',
+        'Rewrite repetitive city pages around genuinely useful local information: actual service coverage, common housing/fireplace context, examples, scheduling details, and unique homeowner guidance. Do not merely swap city names.' if near_dupes else '', 'high'))
+
+    # Chimney topic coverage page by page, not only globally.
+    topic_terms={'inspection':('inspection','level 1','level 2'),'sweep':('chimney sweep','sweeping'),'repair':('chimney repair','masonry repair','fireplace repair'),'reline':('reline','relining','liner'),'water':('waterproof','water repellent','crown repair','leak')}
+    service_pages=[]
+    for p in pages:
+        txt=(p.get('title','')+' '+' '.join(p.get('h1',[]))+' '+p.get('_text','')[:5000]).lower()
+        hits=[k for k,vals in topic_terms.items() if any(v in txt for v in vals)]
+        if hits: service_pages.append({'url':p['url'],'topics':hits})
+    checks.append(result_item('Chimney service coverage','pass' if len(service_pages)>=min(3,len(pages)) else 'warn',
+        f'{len(service_pages)} crawled page(s) clearly cover at least one chimney service topic.',
+        'Create clear, useful pages for the services you actually perform. Keep inspection, sweeping, repair/relining and water-entry topics understandable to homeowners without stuffing every term onto every page.' if len(service_pages)<min(3,len(pages)) else '', 'medium'))
+
     weights={'pass':1.0,'warn':0.55,'fail':0.0}
     score=round(100*sum(weights[x['status']] for x in checks)/len(checks))
     pri={'high':0,'medium':1,'low':2}
     recommendations=sorted([x for x in checks if x['status']!='pass' and x['suggestion']],key=lambda x:(pri.get(x['priority'],9),0 if x['status']=='fail' else 1))[:8]
     return {
         'requested_url':requested,'final_url':final,'http_status':status,'score':score,
-        'crawl':{'pages_crawled':len(pages),'page_limit':MAX_PAGES,'internal_links_found':len(internal_urls),'links_checked':len(checked),'broken_links':broken},
+        'crawl':{'pages_crawled':len(pages),'page_limit':MAX_PAGES,'internal_links_found':len(internal_urls),'links_checked':len(checked),'broken_links':broken,'external_links_found':len(external_urls),'external_links_checked':len(external_checked),'broken_external_links':broken_external},
         'summary':{'title':home['title'],'description':home['description'],'h1_count':len(home['h1']),'word_count':home['word_count'],'internal_links':len(internal_urls),'images':sum(p['images'] for p in pages)},
-        'checks':checks,'pages':[{k:v for k,v in p.items() if k!='links'} for p in pages],
-        'duplicates':{'titles':dup_titles,'descriptions':dup_descs},
+        'checks':checks,'pages':[{k:v for k,v in p.items() if k not in ('links','_text')} for p in pages],
+        'duplicates':{'titles':dup_titles,'descriptions':dup_descs,'city_body_pairs':near_dupes},
+        'credential_resource_links':issuer_links[:20],
+        'service_topic_pages':service_pages[:30],
         'top_suggestions':[{'name':x['name'],'priority':x['priority'],'suggestion':x['suggestion']} for x in recommendations],
         'disclaimer':'VerifySweep Site Audit is a technical and on-page SEO screening tool, not a guarantee of Google rankings. Search visibility also depends on relevance, authority, competition, local signals, content quality, links, reviews, Google Business Profile strength and other factors.'
     }
