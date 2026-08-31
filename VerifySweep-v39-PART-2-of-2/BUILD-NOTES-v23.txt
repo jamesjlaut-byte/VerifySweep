@@ -1,0 +1,21 @@
+VerifySweep v23 — Integrity Graph working pass
+Date: 2026-08-30
+
+New in v23
+- Integrity Graph now supports structured relationship leads instead of only free-text notes.
+- Each relationship lead records identifier type, identifier value, possible related business/listing, source URL, verification status, and evidence note.
+- Added a visual Integrity Graph preview that maps the subject listing to relationship leads.
+- Graph language explicitly treats shared identifiers as investigative leads, not proof of common ownership, fraud, deception, or a Google policy violation.
+- Integrity Graph structured leads persist with the same connected case across all six AI stages.
+- api/investigate.py now accepts, sanitizes, and analyzes relationship_items.
+- Independently verified identifier matches are described as verified matches without automatically assigning meaning to the relationship.
+- Disputed/conflicting relationships remain labeled as disputed.
+- Live model safe-case payload now includes relationship_items.
+- Full Case Review now includes an Integrity Graph Inventory so structured relationship leads are visible outside the stage page.
+- Case Review initial label corrected from “Case readiness” to “Intake completeness.”
+
+Validation
+- assets/investigation-workspace.js passes node --check.
+- case-review.html executable scripts pass node --check.
+- api/investigate.py passes py_compile.
+- api/investigate.py tested with a structured phone relationship lead and returned the expected Integrity Graph item.
