@@ -1,0 +1,23 @@
+VerifySweep v22 — investigation safety/readiness pass
+Date: 2026-08-30
+
+Changes
+- Added explicit filing-readiness gates to the investigation engine.
+- A generated complaint draft is no longer treated as filing-ready by default.
+- Filing readiness now requires:
+  1. Exact Google profile identified.
+  2. At least one independently checked fact.
+  3. At least two independently checkable source URLs.
+  4. Human review of current official Google policy.
+  5. Final human review of the evidence package.
+- Added filing_readiness object to /api/investigate response with passed/failed checks and explanatory note.
+- ReportBuilder AI now displays each readiness gate and disables copy/download/Google-route controls until all gates pass.
+- Case Review now mirrors those filing gates and disables filing controls until review requirements are complete.
+- Renamed the Case Review percentage from “Case readiness” to “Intake completeness” so a filled form is not confused with a verified complaint.
+- Fixed completeness scoring so structured Evidence AI items count as source evidence even when legacy quick-source links are empty.
+
+Validation
+- api Python files compile successfully.
+- investigation-workspace.js passes Node syntax check.
+- case-review inline application JavaScript passes Node syntax check.
+- filing-readiness engine tested in both blocked and all-gates-passed states.
