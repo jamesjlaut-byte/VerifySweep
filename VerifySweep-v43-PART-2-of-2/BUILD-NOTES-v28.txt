@@ -1,0 +1,8 @@
+VerifySweep v28
+
+- Rebuilt Homeowner Center landing page around a focused verification journey.
+- Put individual-professional verification ahead of company-logo trust.
+- Grouped official CSIA, NFI, F.I.R.E. and NCSG/CCP verification routes in one homeowner section.
+- Separated homeowner education from professional tools.
+- Added a clear Professional Workspace gateway to the professional center.
+- Preserved the v27 audience-specific navigation architecture.
