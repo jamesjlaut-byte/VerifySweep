@@ -317,6 +317,7 @@ class handler(BaseHTTPRequestHandler):
     def sendj(self,code,p):
         b=json.dumps(p).encode(); self.send_response(code); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.send_header('Content-Length',str(len(b))); self.end_headers(); self.wfile.write(b)
     def do_OPTIONS(self): self.send_response(204); self.send_header('Allow','POST, OPTIONS'); self.end_headers()
+    def do_GET(self): self.sendj(405,{'error':'Use POST with a JSON investigation case.'})
     def do_POST(self):
         try:
             n=int(self.headers.get('Content-Length','0'))
