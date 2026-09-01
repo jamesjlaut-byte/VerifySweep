@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-31",
+  "source_policy": "Metadata and links only. VerifySweep does not republish these manuals. Manufacturer-hosted documentation receives priority.",
+  "appliances": [
+    {
+      "id": "majestic-sb100",
+      "manufacturer": "Majestic",
+      "brand": "Majestic",
+      "models": ["SB100", "SB100HB"],
+      "model_family": "Biltmore Series",
+      "appliance_type": "Factory-Built Fireplace",
+      "fuel_type": "Wood",
+      "product_status": "Current",
+      "production_years": null,
+      "listing_standard": null,
+      "listing_agency": "UL",
+      "technical": {"required_vent_system":"SL1100 Series Chimney","approved_vent_components":null,"flue_vent_size":null,"clearance_to_combustibles":"See source manual; chimney requires 2-inch clearance to combustibles and building insulation.","mantel_clearance":null,"trim_clearance":null,"hearth_protection":null,"ember_protection":null,"chase_requirements":null,"outside_air_requirements":null,"termination_requirements":null,"approved_accessories":null,"replacement_parts":null},
+      "documents": [{"id":"install-4013-303","title":"Majestic Biltmore SB100 Installation Manual","type":"Installation Manual","models":["SB100","SB100HB"],"url":"https://downloads.hearthnhome.com/installManuals/4013_303.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"Rev L","publication_date":"2024-12","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"heat-glo-6000clx-ift","manufacturer":"Heat & Glo","brand":"Heat & Glo","models":["6000CLX-IFT","6000CLX-IFT-S","6000CLX-IFTLP-S","6000CLX-IFT-G","6000CLX-IFTLP-G","6000CLX-IFT-TG","6000CLX-IFTLPTG"],"model_family":"6000CLX-IFT","appliance_type":"Gas Fireplace","fuel_type":"Gas","product_status":"Current","production_years":null,"listing_standard":"CSA / ANSI Z21.88:19; CSA 2.33:19","listing_agency":"Underwriters Laboratories (UL)","technical":{},
+      "documents":[{"id":"owner-2506-981","title":"Heat & Glo 6000CLX-IFT / 8000CLX-IFT Owner's Manual","type":"Owner's Manual","models":["6000CLX-IFT","8000CLX-IFT"],"url":"https://downloads.hearthnhome.com/installManuals/2506_981-6000CLXIFT_8000CLXIFT-owner.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"2506-981 Rev. O","publication_date":"2023-02","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"quadrafire-3100-i-act","manufacturer":"Quadra-Fire","brand":"Quadra-Fire","models":["3100-I ACT","3100I-ACT"],"model_family":"3100","appliance_type":"Wood Insert","fuel_type":"Wood","product_status":"Discontinued","production_years":null,"listing_standard":"UL 103 HT / ULC S629 chimney referenced by manual","listing_agency":null,"technical":{"flue_vent_size":"6-inch chimney connector; verify complete requirements in source manual."},
+      "documents":[{"id":"install-250-6381","title":"Quadra-Fire 3100-I ACT Wood Insert Installation Manual","type":"Installation Manual","models":["3100-I ACT"],"url":"https://downloads.hearthnhome.com/installManuals/250_6381.pdf","source_type":"OFFICIAL ARCHIVED MANUFACTURER DOCUMENT","revision":"250-638D","publication_date":"2008-09","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"quadrafire-3100-stove-legacy","manufacturer":"Quadra-Fire","brand":"Quadra-Fire","models":["3100","2100","4100"],"model_family":"2100 / 3100 / 4100","appliance_type":"Wood Stove","fuel_type":"Wood","product_status":"Discontinued","production_years":null,"listing_standard":null,"listing_agency":null,"technical":{},
+      "documents":[{"id":"install-2100-3100-4100","title":"Quadra-Fire 2100 / 3100 / 4100 Installation Manual","type":"Installation Manual","models":["2100","3100","4100"],"url":"https://downloads.hearthnhome.com/installManuals/2100_3100_4100.pdf","source_type":"OFFICIAL ARCHIVED MANUFACTURER DOCUMENT","revision":null,"publication_date":null,"date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"vermont-castings-defiant-flexburn","manufacturer":"Vermont Castings","brand":"Vermont Castings","models":["Defiant FlexBurn","1975-CAT-C"],"model_family":"Defiant","appliance_type":"Wood Stove","fuel_type":"Wood","product_status":"Current","production_years":null,"listing_standard":"UL 1482 / ULC-S627 referenced in documentation","listing_agency":null,"technical":{},
+      "documents":[{"id":"install-30005220","title":"Vermont Castings Defiant FlexBurn Installation & Operating Manual","type":"Installation Manual","models":["Defiant FlexBurn"],"url":"https://downloads.hearthnhome.com/installManuals/30005220%20Defiant%20FlexBurn_25.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"R47","publication_date":"2019-10","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"harman-p43","manufacturer":"Harman","brand":"Harman","models":["P43","P43-C"],"model_family":"P-Series","appliance_type":"Pellet Stove","fuel_type":"Pellet","product_status":"Current","production_years":null,"listing_standard":null,"listing_agency":null,"technical":{},
+      "documents":[{"id":"install-p43-current","title":"Harman P43-C / P61-C / P68-C Installation Manual","type":"Installation Manual","models":["P43-C","P61-C","P68-C"],"url":"https://downloads.hearthnhome.com/installManuals/8390-044I_PSeries_Install.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"R12","publication_date":"2025-06","date_added":"2026-08-31","last_source_check":"2026-08-31"},{"id":"owner-p43-legacy","title":"Harman P43 Pellet Stove Owner's Manual","type":"Owner's Manual","models":["P43"],"url":"https://downloads.hearthnhome.com/installManuals/P43.pdf","source_type":"OFFICIAL ARCHIVED MANUFACTURER DOCUMENT","revision":"3-90-04301R18","publication_date":"2013-03","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"heatilator-ndv-series","manufacturer":"Heatilator","brand":"Heatilator","models":["NDV3630I-B","NDV3630IL-B","NDV3933I-B","NDV3933IL-B","NDV4236I-B","NDV4236IL-B","NDV4236I-NVR","NDV4842I-B","NDV4842IL-B"],"model_family":"NDV Series","appliance_type":"Gas Fireplace","fuel_type":"Gas","product_status":"Current","production_years":null,"listing_standard":null,"listing_agency":null,"technical":{},
+      "documents":[{"id":"owner-2382-981","title":"Heatilator NDV Series Owner's Manual","type":"Owner's Manual","models":["NDV3630I-B","NDV3933I-B","NDV4236I-B","NDV4236I-NVR","NDV4842I-B"],"url":"https://downloads.hearthnhome.com/installmanuals/2382_981.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"2382-981 Rev. T","publication_date":"2025-11","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"simplifire-format36","manufacturer":"SimpliFire","brand":"SimpliFire","models":["SF-FORMAT36"],"model_family":"Format","appliance_type":"Electric Fireplace","fuel_type":"Electric","product_status":"Current","production_years":null,"listing_standard":null,"listing_agency":null,"technical":{},
+      "documents":[{"id":"install-2042-950","title":"SimpliFire SF-FORMAT36 Installation Manual","type":"Installation Manual","models":["SF-FORMAT36"],"url":"https://downloads.hearthnhome.com/installManuals/2042_950_FORMAT36_Install_Manual.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"2042-950 Rev. G","publication_date":"2024-02","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"simplifire-wms38","manufacturer":"SimpliFire","brand":"SimpliFire","models":["SF-WMS38-BK"],"model_family":"Wall Mount Series","appliance_type":"Electric Fireplace","fuel_type":"Electric","product_status":"Unknown","production_years":null,"listing_standard":null,"listing_agency":null,"technical":{},
+      "documents":[{"id":"owner-2040-911","title":"SimpliFire SF-WMS38-BK Owner's Manual","type":"Owner's Manual","models":["SF-WMS38-BK"],"url":"https://downloads.hearthnhome.com/installmanuals/2040_911.pdf","source_type":"OFFICIAL ARCHIVED MANUFACTURER DOCUMENT","revision":"2040-911 Rev. M","publication_date":"2021-07","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"heat-glo-escape-insert","manufacturer":"Heat & Glo","brand":"Heat & Glo","models":["Escape-I35FB","Escape-I30FB"],"model_family":"Escape Insert","appliance_type":"Gas Insert","fuel_type":"Gas","product_status":"Discontinued","production_years":null,"listing_standard":null,"listing_agency":null,"technical":{"required_vent_system":"Two 3-inch flexible vent pipes; verify complete configuration and termination requirements in the source manual.","flue_vent_size":"3-inch inlet and exhaust flex venting; verify complete requirements in source manual."},
+      "documents":[{"id":"install-owner-2201-900","title":"Heat & Glo Escape-I35FB / Escape-I30FB Owner's Manual","type":"Owner's Manual","models":["Escape-I35FB","Escape-I30FB"],"url":"https://downloads.hearthnhome.com/installManuals/2201_900.pdf","source_type":"OFFICIAL ARCHIVED MANUFACTURER DOCUMENT","revision":"2201-900 Rev. K","publication_date":"2011-05","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    },
+    {
+      "id":"majestic-warmmajic-ii","manufacturer":"Majestic","brand":"Majestic","models":["WarmMajic-II"],"model_family":"WarmMajic","appliance_type":"Factory-Built Fireplace","fuel_type":"Wood","product_status":"Current","production_years":null,"listing_standard":null,"listing_agency":"PFS","technical":{},
+      "documents":[{"id":"install-4188-901","title":"Majestic WarmMajic-II Installation Manual","type":"Installation Manual","models":["WarmMajic-II"],"url":"https://downloads.hearthnhome.com/installmanuals/WarmMajic-II_Installation_Manual_4188-901.pdf","source_type":"OFFICIAL MANUFACTURER","revision":"4188-901 Rev. I","publication_date":"2024-10","date_added":"2026-08-31","last_source_check":"2026-08-31"}]
+    }
+  ]
+}

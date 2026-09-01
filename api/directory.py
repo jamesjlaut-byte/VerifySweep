@@ -1,9 +1,13 @@
-import json, os, re
+import json, math, os, re
+from functools import lru_cache
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 DB=os.environ.get('DATABASE_URL','')
+ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STATIC_RECORDS=os.path.join(ROOT,'data','certified-professionals.json')
+ZIP_CENTROIDS=os.path.join(ROOT,'data','us-zcta-centroids.tsv')
 PUBLISHED_STATUS='verified'
 ALLOWED_RADII={10,25,50,75,100}
 OFFICIAL_SOURCES={
@@ -21,6 +25,56 @@ def dbconn():
     if not DB:return None
     import psycopg
     return psycopg.connect(DB,connect_timeout=5)
+
+@lru_cache(maxsize=1)
+def static_records():
+    try:
+        with open(STATIC_RECORDS,encoding='utf-8') as source:
+            payload=json.load(source)
+        return payload.get('records',[]) if isinstance(payload,dict) else []
+    except (OSError,ValueError):return []
+
+@lru_cache(maxsize=1)
+def zip_centroids():
+    points={}
+    try:
+        with open(ZIP_CENTROIDS,encoding='utf-8') as source:
+            for line in source:
+                parts=line.rstrip().split('\t')
+                if len(parts)==3 and valid_zip(parts[0]):points[parts[0]]=(float(parts[1]),float(parts[2]))
+    except (OSError,ValueError):return {}
+    return points
+
+def miles(a,b):
+    lat1,lon1,lat2,lon2=map(math.radians,(a[0],a[1],b[0],b[1]))
+    dlat=lat2-lat1;dlon=lon2-lon1
+    arc=2*math.asin(math.sqrt(math.sin(dlat/2)**2+math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2))
+    return 3958.7613*arc
+
+def static_status(item):
+    if not item.get('source_available',True):return ('OFFICIAL SOURCE AVAILABLE','Official source temporarily unavailable. Credential could not be rechecked at this time.')
+    due=clean(item.get('recheck_due_at'),40)
+    try:is_stale=bool(due) and datetime.fromisoformat(due.replace('Z','+00:00')) < datetime.now(timezone.utc)
+    except ValueError:is_stale=True
+    if is_stale:return ('VERIFICATION UPDATE NEEDED','The prior verification is stale and should be checked again at the official source.')
+    if item.get('verification_status')=='verified_from_official_source' and item.get('verified_at'):
+        return ('VERIFIED FROM OFFICIAL SOURCE','The individual credential was checked against the linked official source.')
+    return ('VERIFICATION NEEDED','This record requires an updated official-source verification.')
+
+def search_static(zipcode,q='',radius=25):
+    points=zip_centroids();origin=points.get(zipcode);rows=[];needle=clean(q,120).lower()
+    for source in static_records():
+        item=dict(source)
+        if needle and needle not in ' '.join(clean(item.get(k),200).lower() for k in ('holder','company','city','state')).lower():continue
+        distance=None;target=points.get(clean(item.get('zip'),5))
+        if origin and target:
+            distance=miles(origin,target)
+            if distance>radius:continue
+        elif zipcode and zipcode!=clean(item.get('zip'),5) and zipcode not in (item.get('service_zips') or []):continue
+        item['distance']=round(distance,1) if distance is not None else None
+        item['display_status'],item['status_note']=static_status(item);rows.append(item)
+    rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
+    return rows,bool(origin)
 
 def ensure(conn):
     with conn.cursor() as cur:
@@ -70,7 +124,7 @@ def rowdict(keys,row):return dict(zip(keys,row))
 
 def search_db(zipcode,q='',radius=25):
     conn=dbconn()
-    if not conn:return [],False
+    if not conn:return search_static(zipcode,q,radius)
     try:
         ensure(conn)
         with conn.cursor() as cur:
@@ -106,7 +160,11 @@ def search_db(zipcode,q='',radius=25):
 
 def detail_db(identifier):
     conn=dbconn()
-    if not conn:return None
+    if not conn:
+        for source in static_records():
+            if str(source.get('id'))==str(identifier):
+                item=dict(source);item['distance']=None;item['display_status'],item['status_note']=static_status(item);return item
+        return None
     try:
         ensure(conn)
         with conn.cursor() as cur:
@@ -143,8 +201,8 @@ class handler(BaseHTTPRequestHandler):
         try:
             qs=parse_qs(urlparse(self.path).query);identifier=clean((qs.get('id') or [''])[0],30)
             if identifier:
-                if not identifier.isdigit():return self.sendj(400,{'error':'Invalid professional record.'})
-                result=detail_db(int(identifier));return self.sendj(200 if result else 404,{'result':result} if result else {'error':'Professional record not found.'})
+                if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',identifier):return self.sendj(400,{'error':'Invalid professional record.'})
+                result=detail_db(int(identifier) if identifier.isdigit() else identifier);return self.sendj(200 if result else 404,{'result':result} if result else {'error':'Professional record not found.'})
             z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120)
             try:radius=int((qs.get('radius') or ['25'])[0])
             except:radius=25
