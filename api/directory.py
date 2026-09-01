@@ -76,6 +76,12 @@ def search_static(zipcode,q='',radius=25):
     rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
     return rows,bool(origin)
 
+def detail_static(identifier):
+    for source in static_records():
+        if str(source.get('id'))==str(identifier):
+            item=dict(source);item['distance']=None;item['display_status'],item['status_note']=static_status(item);return item
+    return None
+
 def ensure(conn):
     with conn.cursor() as cur:
         cur.execute('''CREATE TABLE IF NOT EXISTS pro_directory (
@@ -155,16 +161,16 @@ def search_db(zipcode,q='',radius=25):
                 item=rowdict(keys,raw);label,note=status_for(item);item['display_status']=label;item['status_note']=note
                 if item['distance'] is not None:item['distance']=round(float(item['distance']),1)
                 rows.append(item)
-            return rows,bool(origin)
+            fallback,fallback_geo=search_static(zipcode,q,radius)
+            seen={(clean(r.get('issuer'),80).lower(),clean(r.get('source'),1000).lower()) for r in rows}
+            rows.extend(r for r in fallback if (clean(r.get('issuer'),80).lower(),clean(r.get('source'),1000).lower()) not in seen)
+            rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
+            return rows,bool(origin) or fallback_geo
     finally:conn.close()
 
 def detail_db(identifier):
     conn=dbconn()
-    if not conn:
-        for source in static_records():
-            if str(source.get('id'))==str(identifier):
-                item=dict(source);item['distance']=None;item['display_status'],item['status_note']=static_status(item);return item
-        return None
+    if not conn:return detail_static(identifier)
     try:
         ensure(conn)
         with conn.cursor() as cur:
@@ -172,7 +178,7 @@ def detail_db(identifier):
               credential_source,city,state,postal_code,website,phone,verification_status,verified_at,
               source_last_checked_at,recheck_due_at,source_available,source_note,NULL::double precision
               FROM pro_directory WHERE id=%s AND status=%s''',(identifier,PUBLISHED_STATUS));raw=cur.fetchone()
-            if not raw:return None
+            if not raw:return detail_static(identifier)
             keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','distance']
             item=rowdict(keys,raw);item['display_status'],item['status_note']=status_for(item);return item
     finally:conn.close()
