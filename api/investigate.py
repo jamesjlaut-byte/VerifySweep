@@ -103,8 +103,8 @@ def analyze(c):
         if att['name'] or att['id']: evidence_attachments.append(att)
     raw_evidence_items=c.get('evidence_items') if isinstance(c.get('evidence_items'),list) else []
     evidence_items=[]
-    allowed_types={'google_profile','website','credential','business_record','screenshot','other'}
-    allowed_status={'unreviewed','reporter_observed','independently_verified','disputed'}
+    allowed_types={'google_profile','google_listing','website','credential','certification_claim','business_record','advertisement','review','phone_number','address','email','social_media','customer_communication','screenshot','other'}
+    allowed_status={'unreviewed','reporter_observed','independently_verified','disputed','verified_fact','unverified_claim','possible_concern','needs_more_evidence'}
     for item in raw_evidence_items[:60]:
         if not isinstance(item,dict): continue
         ev={
@@ -170,7 +170,11 @@ def analyze(c):
     for item in evidence_items:
         label={
           'independently_verified':'independently verified source item',
+          'verified_fact':'verified fact',
           'reporter_observed':'reporter-observed source item',
+          'unverified_claim':'unverified claim',
+          'possible_concern':'possible concern',
+          'needs_more_evidence':'item needing more evidence',
           'disputed':'disputed/conflicting source item',
           'unreviewed':'unreviewed source item'
         }.get(item['status'],'unreviewed source item')
@@ -252,7 +256,7 @@ def analyze(c):
 
     # Evidence-strength summary helps the investigator distinguish preserved facts from leads and theories.
     strength={
-      'strong': sum(1 for x in evidence if x.get('class')=='reporter-verified observation') + (1 if len(links)>=2 else 0) + sum(1 for x in evidence_items if x.get('status')=='independently_verified'),
+      'strong': sum(1 for x in evidence if x.get('class')=='reporter-verified observation') + (1 if len(links)>=2 else 0) + sum(1 for x in evidence_items if x.get('status') in {'independently_verified','verified_fact'}),
       'supporting': sum(1 for x in evidence if x.get('class') in ('source URL','reporter observation','reporter-observed source item')),
       'unverified': sum(1 for x in evidence if x.get('class')=='unverified theory') + sum(1 for x in signals if x.get('status')=='needs verification')
     }
@@ -270,7 +274,7 @@ def analyze(c):
     if not website:gaps.append('Add the public website if site identity or routing is relevant.')
 
     # Filing readiness is deliberately stricter than intake completeness. A generated draft is not a finding.
-    verified_structured=sum(1 for x in evidence_items if x.get('status')=='independently_verified')
+    verified_structured=sum(1 for x in evidence_items if x.get('status') in {'independently_verified','verified_fact'})
     policy_human_review=bool(c.get('policy_human_review'))
     human_approved=bool(c.get('human_approved'))
     filing_checks=[
