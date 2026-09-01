@@ -4,13 +4,22 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError, URLError
 from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json, re, socket, ipaddress
+import json, re, socket, ipaddress, time
 
 MAX_BYTES = 1_250_000
 MAX_PAGES = 18
 MAX_LINK_CHECKS = 36
 MAX_EXTERNAL_CHECKS = 12
+AUDIT_TIMEOUT_SECONDS = 45
 UA = 'VerifySweep-SiteAudit/1.5 (+https://www.verifysweep.com)'
+
+class AuditTimeout(TimeoutError):
+    pass
+
+def timeout_for(deadline, maximum):
+    remaining=deadline-time.monotonic()
+    if remaining<=0.25: raise AuditTimeout('The website audit timed out before it could finish.')
+    return max(0.25,min(maximum,remaining))
 
 class PageParser(HTMLParser):
     def __init__(self):
@@ -73,8 +82,9 @@ class SafeRedirect(HTTPRedirectHandler):
         return super().redirect_request(req,fp,code,msg,headers,absolute)
 
 
-def fetch(url,timeout=6,limit=MAX_BYTES):
+def fetch(url,timeout=6,limit=MAX_BYTES,deadline=None):
     assert_public_host(url)
+    if deadline is not None: timeout=timeout_for(deadline,timeout)
     req=Request(url,headers={'User-Agent':UA,'Accept':'text/html,application/xhtml+xml;q=0.9,*/*;q=0.4'})
     with build_opener(SafeRedirect()).open(req,timeout=timeout) as r:
         final=r.geturl(); assert_public_host(final); ctype=r.headers.get('Content-Type','')
@@ -83,11 +93,13 @@ def fetch(url,timeout=6,limit=MAX_BYTES):
         return final,getattr(r,'status',200),ctype,data.decode(r.headers.get_content_charset() or 'utf-8',errors='replace')
 
 
-def status_check(url,timeout=4):
+def status_check(url,timeout=4,deadline=None):
     try:
         assert_public_host(url)
+        if deadline is not None: timeout=timeout_for(deadline,timeout)
         req=Request(url,headers={'User-Agent':UA},method='GET')
         with build_opener(SafeRedirect()).open(req,timeout=timeout) as r: return getattr(r,'status',200),r.geturl()
+    except AuditTimeout: raise
     except HTTPError as e: return e.code,url
     except Exception: return 0,url
 
@@ -165,9 +177,10 @@ def result_item(name,status,detail,suggestion='',priority='medium'):
     return {'name':name,'status':status,'detail':detail,'suggestion':suggestion,'priority':priority}
 
 
-def audit(raw_url):
+def audit(raw_url,timeout_seconds=AUDIT_TIMEOUT_SECONDS):
+    deadline=time.monotonic()+timeout_seconds
     requested=normalize_url(raw_url)
-    final,status,ctype,html=fetch(requested)
+    final,status,ctype,html=fetch(requested,deadline=deadline)
     if 'html' not in ctype.lower() and '<html' not in html[:1000].lower(): raise ValueError('That URL did not return an HTML webpage.')
     host=urlparse(final).hostname; root=f'{urlparse(final).scheme}://{urlparse(final).netloc}'
 
@@ -182,12 +195,13 @@ def audit(raw_url):
         if u in seen: continue
         seen.add(u)
         try:
-            fu,st,ct,body=fetch(u,timeout=5)
+            fu,st,ct,body=fetch(u,timeout=5,deadline=deadline)
             if ('html' not in ct.lower() and '<html' not in body[:1000].lower()): continue
             page=analyze_page(fu,st,body); pages.append(page)
             for href in page['links']:
                 nxt=clean_internal(fu,href,host)
                 if nxt and nxt not in seen and nxt not in queue: queue.append(nxt)
+        except AuditTimeout: raise
         except Exception: continue
 
     # Internal-link inventory and status sampling.
@@ -218,12 +232,13 @@ def audit(raw_url):
 
     checked=internal_urls[:MAX_LINK_CHECKS]; broken=[]
     with ThreadPoolExecutor(max_workers=6) as ex:
-        fut={ex.submit(status_check,u):u for u in checked}
+        fut={ex.submit(status_check,u,4,deadline):u for u in checked}
         for f in as_completed(fut):
             u=fut[f]
             try:
                 st,_=f.result()
                 if st==0 or st>=400: broken.append({'url':u,'status':st})
+            except AuditTimeout: raise
             except Exception: broken.append({'url':u,'status':0})
 
     external_urls=[]
@@ -233,12 +248,13 @@ def audit(raw_url):
             if u and u not in external_urls: external_urls.append(u)
     external_checked=external_urls[:MAX_EXTERNAL_CHECKS]; broken_external=[]
     with ThreadPoolExecutor(max_workers=4) as ex:
-        fut={ex.submit(status_check,u):u for u in external_checked}
+        fut={ex.submit(status_check,u,4,deadline):u for u in external_checked}
         for f in as_completed(fut):
             u=fut[f]
             try:
                 st,_=f.result()
                 if st==0 or st>=400: broken_external.append({'url':u,'status':st})
+            except AuditTimeout: raise
             except Exception: broken_external.append({'url':u,'status':0})
 
     titles={}; descs={}
@@ -275,8 +291,8 @@ def audit(raw_url):
     checks.append(result_item('Image accessibility','pass' if alt_missing==0 else 'warn',f'{alt_missing} image(s) across crawled pages are missing an alt attribute.','Add descriptive alt text to meaningful chimney/fireplace images; decorative images should use alt="".' if alt_missing else '', 'low'))
     checks.append(result_item('Content depth','pass' if thin==0 else 'warn',f'{thin} of {len(pages)} crawled pages have fewer than 200 visible words.','Expand thin pages only with useful original content: service process, inspection scope, common problems, qualifications, service-area specifics and FAQs.' if thin else '', 'medium'))
     checks.append(result_item('Phone consistency','warn' if inconsistent_phone else 'pass','Different phone-number sets were detected across crawled pages.' if inconsistent_phone else 'No obvious phone-number inconsistency found in the crawled sample.','Make sure location-specific numbers are intentional and clearly associated with the correct office/service area; keep primary NAP information consistent.' if inconsistent_phone else '', 'medium'))
-    robots_ok=status_check(urljoin(root,'/robots.txt'))[0] in range(200,400)
-    sitemap_ok=status_check(urljoin(root,'/sitemap.xml'))[0] in range(200,400)
+    robots_ok=status_check(urljoin(root,'/robots.txt'),deadline=deadline)[0] in range(200,400)
+    sitemap_ok=status_check(urljoin(root,'/sitemap.xml'),deadline=deadline)[0] in range(200,400)
     checks.append(result_item('robots.txt','pass' if robots_ok else 'warn','robots.txt is reachable.' if robots_ok else 'robots.txt was not found or could not be reached.','Publish a valid robots.txt and reference the XML sitemap.' if not robots_ok else '', 'medium'))
     checks.append(result_item('XML sitemap','pass' if sitemap_ok else 'warn','sitemap.xml is reachable.' if sitemap_ok else 'sitemap.xml was not found or could not be reached.','Publish an XML sitemap and submit it in Google Search Console.' if not sitemap_ok else '', 'medium'))
 
@@ -398,14 +414,23 @@ def audit(raw_url):
 class handler(BaseHTTPRequestHandler):
     def _send(self,code,payload):
         body=json.dumps(payload).encode('utf-8'); self.send_response(code)
-        self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.send_header('Cache-Control','no-store'); self.end_headers(); self.wfile.write(body)
-    def do_OPTIONS(self): self.send_response(204); self.send_header('Allow','POST, OPTIONS'); self.end_headers()
+        self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Content-Length',str(len(body))); self.send_header('Cache-Control','no-store'); self.send_header('X-Content-Type-Options','nosniff'); self.end_headers(); self.wfile.write(body)
+    def do_OPTIONS(self): self.send_response(204); self.send_header('Allow','POST, OPTIONS'); self.send_header('Access-Control-Allow-Methods','POST, OPTIONS'); self.send_header('Access-Control-Allow-Headers','Content-Type'); self.send_header('Cache-Control','no-store'); self.end_headers()
+    def do_GET(self): self._send(405,{'error':'Use POST with a JSON body containing a public website URL.'})
     def do_POST(self):
         try:
             n=int(self.headers.get('Content-Length','0'))
             if n<=0 or n>10000: raise ValueError('Invalid request.')
-            payload=json.loads(self.rfile.read(n).decode('utf-8')); self._send(200,audit(payload.get('url','')))
+            if 'application/json' not in self.headers.get('Content-Type','').lower(): raise ValueError('Send the website URL as JSON.')
+            payload=json.loads(self.rfile.read(n).decode('utf-8'))
+            if not isinstance(payload,dict): raise ValueError('Invalid request.')
+            self._send(200,audit(payload.get('url','')))
         except (ValueError,json.JSONDecodeError) as e: self._send(400,{'error':str(e)})
         except HTTPError as e: self._send(502,{'error':f'The website returned HTTP {e.code}.'})
-        except URLError: self._send(502,{'error':'The website could not be reached.'})
-        except Exception: self._send(500,{'error':'The audit could not be completed. Try again or check the URL.'})
+        except (AuditTimeout,socket.timeout,TimeoutError): self._send(504,{'error':'The website audit timed out. The site may be slow, blocking automated requests, or too large to crawl right now.'})
+        except URLError as e:
+            if isinstance(getattr(e,'reason',None),(socket.timeout,TimeoutError)): self._send(504,{'error':'The website took too long to respond. Try again later.'})
+            else: self._send(502,{'error':'The website could not be reached. Check the URL and confirm the site is publicly accessible.'})
+        except Exception as e:
+            print(f'[site-audit] failed: {type(e).__name__}: {e}',flush=True)
+            self._send(500,{'error':'The audit could not be completed. Try again or check that the website allows automated crawlers.'})
