@@ -11,8 +11,9 @@ MAX_PAGES = 18
 MAX_LINK_CHECKS = 36
 MAX_EXTERNAL_CHECKS = 12
 AUDIT_TIMEOUT_SECONDS = 45
-CRAWL_TIMEOUT_SECONDS = 24
-LINK_CHECK_TIMEOUT_SECONDS = 6
+CRAWL_TIMEOUT_SECONDS = 14
+LINK_CHECK_TIMEOUT_SECONDS = 4
+RESOURCE_CHECK_TIMEOUT_SECONDS = 5
 UA = 'VerifySweep-SiteAudit/1.5 (+https://www.verifysweep.com)'
 
 class AuditTimeout(TimeoutError):
@@ -296,8 +297,11 @@ def audit(raw_url,timeout_seconds=AUDIT_TIMEOUT_SECONDS):
     checks.append(result_item('Image accessibility','pass' if alt_missing==0 else 'warn',f'{alt_missing} image(s) across crawled pages are missing an alt attribute.','Add descriptive alt text to meaningful chimney/fireplace images; decorative images should use alt="".' if alt_missing else '', 'low'))
     checks.append(result_item('Content depth','pass' if thin==0 else 'warn',f'{thin} of {len(pages)} crawled pages have fewer than 200 visible words.','Expand thin pages only with useful original content: service process, inspection scope, common problems, qualifications, service-area specifics and FAQs.' if thin else '', 'medium'))
     checks.append(result_item('Phone consistency','warn' if inconsistent_phone else 'pass','Different phone-number sets were detected across crawled pages.' if inconsistent_phone else 'No obvious phone-number inconsistency found in the crawled sample.','Make sure location-specific numbers are intentional and clearly associated with the correct office/service area; keep primary NAP information consistent.' if inconsistent_phone else '', 'medium'))
-    robots_ok=status_check(urljoin(root,'/robots.txt'),deadline=deadline)[0] in range(200,400)
-    sitemap_ok=status_check(urljoin(root,'/sitemap.xml'),deadline=deadline)[0] in range(200,400)
+    resource_check_deadline=min(deadline,time.monotonic()+RESOURCE_CHECK_TIMEOUT_SECONDS)
+    try: robots_ok=status_check(urljoin(root,'/robots.txt'),deadline=resource_check_deadline)[0] in range(200,400)
+    except AuditTimeout: robots_ok=False
+    try: sitemap_ok=status_check(urljoin(root,'/sitemap.xml'),deadline=resource_check_deadline)[0] in range(200,400)
+    except AuditTimeout: sitemap_ok=False
     checks.append(result_item('robots.txt','pass' if robots_ok else 'warn','robots.txt is reachable.' if robots_ok else 'robots.txt was not found or could not be reached.','Publish a valid robots.txt and reference the XML sitemap.' if not robots_ok else '', 'medium'))
     checks.append(result_item('XML sitemap','pass' if sitemap_ok else 'warn','sitemap.xml is reachable.' if sitemap_ok else 'sitemap.xml was not found or could not be reached.','Publish an XML sitemap and submit it in Google Search Console.' if not sitemap_ok else '', 'medium'))
 
