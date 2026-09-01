@@ -255,14 +255,17 @@ def analyze(c):
     add_step('final','Human-review the complaint package before filing','Remove unsupported conclusions, attach the strongest evidence, and submit through the Google route that matches the verified issue.','ReportBuilder AI')
 
     # Evidence-strength summary helps the investigator distinguish preserved facts from leads and theories.
+    # A reporter-selected "verified fact" is useful documentation, but it is not
+    # automatically independent corroboration. Do not double-count the summary
+    # generated from that same structured item as separate strong evidence.
     strength={
-      'strong': sum(1 for x in evidence if x.get('class')=='reporter-verified observation') + (1 if len(links)>=2 else 0) + sum(1 for x in evidence_items if x.get('status') in {'independently_verified','verified_fact'}),
-      'supporting': sum(1 for x in evidence if x.get('class') in ('source URL','reporter observation','reporter-observed source item')),
+      'strong': sum(1 for x in evidence_items if x.get('status')=='independently_verified'),
+      'supporting': sum(1 for x in evidence if x.get('class') in ('reporter-verified observation','source URL','reporter observation','reporter-observed source item','verified fact')),
       'unverified': sum(1 for x in evidence if x.get('class')=='unverified theory') + sum(1 for x in signals if x.get('status')=='needs verification')
     }
     evidence_status='developing'
     source_count=len(set(links+[x.get('url','') for x in evidence_items if x.get('url')]))
-    if strength['strong']>=2 and source_count>=2 and verified: evidence_status='strong starting package'
+    if strength['strong']>=1 and source_count>=2 and verified: evidence_status='strong starting package'
     elif not verified or source_count==0: evidence_status='insufficient for filing'
 
     gaps=[]
@@ -279,7 +282,7 @@ def analyze(c):
     human_approved=bool(c.get('human_approved'))
     filing_checks=[
       {'key':'profile_identified','label':'Exact Google profile identified','passed':bool(maps)},
-      {'key':'verified_fact','label':'At least one independently checked fact recorded','passed':bool(verified or verified_structured)},
+      {'key':'verified_fact','label':'At least one documented fact recorded','passed':bool(verified or verified_structured)},
       {'key':'supporting_sources','label':'At least two independently checkable source URLs preserved','passed':source_count>=2},
       {'key':'policy_review','label':'Current official Google policy reviewed by a human','passed':policy_human_review},
       {'key':'human_review','label':'Final evidence package reviewed by a human','passed':human_approved},
