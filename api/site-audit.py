@@ -11,6 +11,8 @@ MAX_PAGES = 18
 MAX_LINK_CHECKS = 36
 MAX_EXTERNAL_CHECKS = 12
 AUDIT_TIMEOUT_SECONDS = 45
+CRAWL_TIMEOUT_SECONDS = 24
+LINK_CHECK_TIMEOUT_SECONDS = 6
 UA = 'VerifySweep-SiteAudit/1.5 (+https://www.verifysweep.com)'
 
 class AuditTimeout(TimeoutError):
@@ -186,6 +188,7 @@ def audit(raw_url,timeout_seconds=AUDIT_TIMEOUT_SECONDS):
 
     home=analyze_page(final,status,html)
     pages=[home]; seen={urldefrag(final)[0]}; queue=[]
+    crawl_deadline=min(deadline,time.monotonic()+CRAWL_TIMEOUT_SECONDS)
     for href in home['links']:
         u=clean_internal(final,href,host)
         if u and u not in seen: queue.append(u)
@@ -195,13 +198,13 @@ def audit(raw_url,timeout_seconds=AUDIT_TIMEOUT_SECONDS):
         if u in seen: continue
         seen.add(u)
         try:
-            fu,st,ct,body=fetch(u,timeout=5,deadline=deadline)
+            fu,st,ct,body=fetch(u,timeout=5,deadline=crawl_deadline)
             if ('html' not in ct.lower() and '<html' not in body[:1000].lower()): continue
             page=analyze_page(fu,st,body); pages.append(page)
             for href in page['links']:
                 nxt=clean_internal(fu,href,host)
                 if nxt and nxt not in seen and nxt not in queue: queue.append(nxt)
-        except AuditTimeout: raise
+        except AuditTimeout: break
         except Exception: continue
 
     # Internal-link inventory and status sampling.
@@ -231,14 +234,15 @@ def audit(raw_url,timeout_seconds=AUDIT_TIMEOUT_SECONDS):
         if page.get('word_count',0)>=200 and page.get('internal_links_out',0)<2: page['issues'].append('Low internal-link support')
 
     checked=internal_urls[:MAX_LINK_CHECKS]; broken=[]
+    internal_check_deadline=min(deadline,time.monotonic()+LINK_CHECK_TIMEOUT_SECONDS)
     with ThreadPoolExecutor(max_workers=6) as ex:
-        fut={ex.submit(status_check,u,4,deadline):u for u in checked}
+        fut={ex.submit(status_check,u,4,internal_check_deadline):u for u in checked}
         for f in as_completed(fut):
             u=fut[f]
             try:
                 st,_=f.result()
                 if st==0 or st>=400: broken.append({'url':u,'status':st})
-            except AuditTimeout: raise
+            except AuditTimeout: continue
             except Exception: broken.append({'url':u,'status':0})
 
     external_urls=[]
@@ -247,14 +251,15 @@ def audit(raw_url,timeout_seconds=AUDIT_TIMEOUT_SECONDS):
             u=clean_external(page['url'],href,host)
             if u and u not in external_urls: external_urls.append(u)
     external_checked=external_urls[:MAX_EXTERNAL_CHECKS]; broken_external=[]
+    external_check_deadline=min(deadline,time.monotonic()+LINK_CHECK_TIMEOUT_SECONDS)
     with ThreadPoolExecutor(max_workers=4) as ex:
-        fut={ex.submit(status_check,u,4,deadline):u for u in external_checked}
+        fut={ex.submit(status_check,u,4,external_check_deadline):u for u in external_checked}
         for f in as_completed(fut):
             u=fut[f]
             try:
                 st,_=f.result()
                 if st==0 or st>=400: broken_external.append({'url':u,'status':st})
-            except AuditTimeout: raise
+            except AuditTimeout: continue
             except Exception: broken_external.append({'url':u,'status':0})
 
     titles={}; descs={}
