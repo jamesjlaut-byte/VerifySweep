@@ -189,6 +189,23 @@ class DirectorySchemaTests(unittest.TestCase):
         boerne = {row['company'] for row in DIRECTORY.search_static_companies(city='Boerne', state='TX')}
         self.assertIn('Clean as a Whistle Chimney Sweep', boerne)
 
+    def test_panhandle_and_waco_companies_are_searchable(self):
+        canyon = {row['company'] for row in DIRECTORY.search_static_companies(city='Canyon', state='TX')}
+        self.assertIn('West Texas Chimney & Venting Solutions', canyon)
+        waco = {row['company'] for row in DIRECTORY.search_static_companies(city='Waco', state='TX')}
+        self.assertIn('Blue Collar Chimney', waco)
+        self.assertIn('Ables Top Hat Home Services', waco)
+
+    def test_harkys_florida_locations_do_not_cross_match_texas(self):
+        tampa = DIRECTORY.search_static_companies(city='Tampa', state='FL')
+        self.assertEqual([row['company'] for row in tampa], ["Harky's Chimney & Home Services"])
+        self.assertEqual(tampa[0]['matched_service_state'], 'FL')
+        self.assertEqual(DIRECTORY.search_static_companies(city='Tampa', state='TX'), [])
+
+    def test_expanded_ables_published_service_areas_are_searchable(self):
+        cameron = {row['company'] for row in DIRECTORY.search_static_companies(city='Cameron', state='TX')}
+        self.assertIn('Ables Top Hat Home Services', cameron)
+
 
 if __name__ == '__main__':
     unittest.main()

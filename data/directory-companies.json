@@ -4,6 +4,36 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "company": "West Texas Chimney & Venting Solutions",
+      "website": "https://www.westtexaschimney.com/",
+      "phone": "(806) 358-0817",
+      "city": "Amarillo",
+      "state": "TX",
+      "postal_code": "79106",
+      "service_areas": ["Amarillo", "Canyon", "Claude", "Borger", "Pampa", "Dumas", "Hereford"],
+      "source_type": "official_business_website",
+      "source_url": "https://www.westtexaschimney.com/",
+      "service_area_source_url": "https://www.westtexaschimney.com/",
+      "captured_at": "2026-09-02T22:00:00Z",
+      "source_note": "The business website publishes an Amarillo business address and phone number and names the included Texas Panhandle service communities.",
+      "history_note": "The company website states that the business was founded in Amarillo in 1975.",
+      "recognition_source_url": "https://www.westtexaschimney.com/"
+    },
+    {
+      "company": "Blue Collar Chimney",
+      "website": "https://www.bluecollarchimney.com/",
+      "phone": "(254) 313-8008",
+      "city": "Waco",
+      "state": "TX",
+      "postal_code": "",
+      "service_areas": ["Waco", "Temple", "Belton", "Killeen", "Harker Heights", "Hewitt", "Woodway", "Robinson", "McGregor", "Round Rock", "Georgetown", "Austin", "Dallas"],
+      "source_type": "official_business_website",
+      "source_url": "https://www.bluecollarchimney.com/",
+      "service_area_source_url": "https://www.bluecollarchimney.com/",
+      "captured_at": "2026-09-02T22:00:00Z",
+      "source_note": "The business website publishes Waco as its home base, this public business phone number, and the included Central and North Texas service cities. Company marketing claims are not converted into credentials."
+    },
+    {
       "company": "Lords Chimney",
       "website": "https://lordschimney.com/",
       "phone": "(281) 497-4000",
@@ -99,13 +129,13 @@
       "city": "Nolanville",
       "state": "TX",
       "postal_code": "76559",
-      "service_areas": ["Lampasas", "Gatesville", "Kemper", "Copperas Cove", "Killeen", "Fort Cavazos", "Harker Heights", "Nolanville", "Belton", "Salado", "Temple", "Waco", "Georgetown", "Woodway", "Round Rock", "Austin"],
+      "service_areas": ["Andice", "Austin", "Bartlett", "Bee House", "Bellmead", "Belton", "Ben Arnold", "Bend", "Bertram", "Beverly Hills", "Briggs", "Bruceville", "Buckholts", "Burlington", "Burnet", "Cameron", "Cedar Park", "Chilton", "Copperas Cove", "Crawford", "Davilla", "Eddy", "Evant", "Flat", "Florence", "Fort Cavazos", "Gatesville", "Georgetown", "Granger", "Harker Heights", "Heidenheimer", "Hewitt", "Holland", "Hutto", "Izoro", "Jarrell", "Jonesboro", "Kempner", "Killeen", "Lampasas", "Leander", "Leon Junction", "Liberty Hill", "Little River Academy", "Lometa", "Lorena", "Lott", "Maysfield", "McGregor", "Moody", "Morgans Point", "Mound", "Nolanville", "Oakalla", "Oglesby", "Pendleton", "Pflugerville", "Purmela", "Robinson", "Rogers", "Rosebud", "Round Rock", "Salado", "Satin", "Schwertner", "South Mountain", "Sun City", "Taylor", "Temple", "Troy", "Valley Mills", "Volente", "Waco", "Walburg", "Weir", "Woodway"],
       "service_zips": ["76559"],
       "source_type": "official_business_website",
       "source_url": "https://ablestophat.com/",
-      "service_area_source_url": "https://ablestophat.com/",
-      "captured_at": "2026-09-02T19:00:00Z",
-      "source_note": "The business website publishes Nolanville contact information and lists the included Central Texas communities as service areas. The source spelling is retained where a city name may require clarification."
+      "service_area_source_url": "https://ablestophat.com/about/service-area/",
+      "captured_at": "2026-09-02T22:00:00Z",
+      "source_note": "The business website publishes Nolanville contact information and a detailed list of the included Central Texas service communities. Published locality names are retained where they may require clarification."
     },
     {
       "company": "Hill Country Air Duct And Chimney Sweeps LLC",
@@ -200,12 +230,13 @@
       "state": "TX",
       "postal_code": "78752",
       "service_areas": ["Houston", "Spring", "The Woodlands", "Cypress", "Kingwood", "Katy", "Sugar Land", "Conroe", "Humble", "Baytown", "Alvin", "Galveston", "Huntsville", "Navasota", "Brenham", "San Antonio", "New Braunfels", "Cibolo", "Schertz", "Seguin", "Converse", "Universal City", "China Grove", "Bandera", "Helotes", "Tyler", "Longview", "Lufkin", "Nacogdoches", "Whitehouse", "Austin", "Round Rock", "Cedar Park", "Georgetown", "San Marcos", "Pflugerville", "Leander", "Kyle", "Buda", "Lago Vista", "Dallas", "Fort Worth", "Corpus Christi", "McAllen", "Edinburg"],
+      "service_locations": [{"city":"Tampa","state":"FL"},{"city":"Orlando","state":"FL"},{"city":"Lakeland","state":"FL"},{"city":"St. Petersburg","state":"FL"},{"city":"Sarasota","state":"FL"},{"city":"Deltona","state":"FL"}],
       "service_zips": ["77073", "75219", "78752", "78413", "78542", "78205", "75702"],
       "source_type": "official_business_website",
       "source_url": "https://www.harkyschimney.com/",
-      "service_area_source_url": "https://www.harkyschimney.com/service-area-houston",
-      "captured_at": "2026-09-02T20:00:00Z",
-      "source_note": "The business website publishes multiple Texas contact locations and names the included Texas service communities. No company-wide credential status is inferred."
+      "service_area_source_url": "https://www.harkyschimney.com/corpus-christi",
+      "captured_at": "2026-09-02T22:00:00Z",
+      "source_note": "The business website publishes multiple Texas contact locations and names the included Texas and Florida service communities. No company-wide credential status is inferred."
     },
     {
       "company": "Santa Chimney Sweep",
