@@ -80,6 +80,21 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertNotIn('removed', DIRECTORY.PUBLIC_COMPANY_STATUSES)
         self.assertNotIn('not_eligible', DIRECTORY.PUBLIC_COMPANY_STATUSES)
 
+    def test_static_company_projection_does_not_inherit_credential_verification(self):
+        rows = DIRECTORY.search_static_companies(q='Wolfman')
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['company'], 'Wolfman Chimney & Fireplace')
+        self.assertEqual(rows[0]['public_status'], 'unverified')
+        self.assertEqual(rows[0]['display_status'], 'UNVERIFIED')
+        self.assertEqual(rows[0]['claim_status'], 'unclaimed')
+        for private_or_individual_field in ('holder', 'credential', 'source', 'address_line1'):
+            self.assertNotIn(private_or_individual_field, rows[0])
+
+    def test_static_company_projection_supports_location_search(self):
+        self.assertEqual(len(DIRECTORY.search_static_companies(city='New Braunfels',state='TX')), 1)
+        self.assertEqual(len(DIRECTORY.search_static_companies(zipcode='78070')), 1)
+        self.assertEqual(DIRECTORY.search_static_companies(zipcode='00000'), [])
+
 
 if __name__ == '__main__':
     unittest.main()

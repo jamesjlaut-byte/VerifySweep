@@ -217,9 +217,35 @@ def rowdict(keys,row):return dict(zip(keys,row))
 
 def company_status_label(status):return COMPANY_STATUS_LABELS.get(clean(status,60).lower(),'UNVERIFIED')
 
+def company_key(item):
+    return (clean(item.get('company'),200).lower(),clean(item.get('zip'),5))
+
+def search_static_companies(zipcode='',q='',city='',state=''):
+    groups={};needle=clean(q,120).lower();city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
+    for source in static_records():
+        company=clean(source.get('company'),200);company_city=clean(source.get('city'),120);company_state=clean(source.get('state'),40);company_zip=clean(source.get('zip'),5)
+        if needle and needle not in company.lower():continue
+        if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
+        if city_needle and city_needle not in company_city.lower():continue
+        if state_needle and state_needle!=company_state.lower():continue
+        key=(company.lower(),company_zip)
+        item=groups.setdefault(key,{
+          'id':'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
+          'company':company,'website':clean(source.get('website'),1000),'phone':clean(source.get('phone'),80),
+          'city':company_city,'state':company_state,'zip':company_zip,'public_status':'unverified','claim_status':'unclaimed',
+          'last_reviewed_at':clean(source.get('last_checked_at'),40) or None,'verification_due_at':None,
+          'display_status':'UNVERIFIED'
+        })
+        checked=clean(source.get('last_checked_at'),40)
+        if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
+        if not item['website'] and source.get('website'):item['website']=clean(source.get('website'),1000)
+        if not item['phone'] and source.get('phone'):item['phone']=clean(source.get('phone'),80)
+    return sorted(groups.values(),key=lambda item:item['company'].lower())
+
 def search_companies_db(zipcode='',q='',city='',state=''):
+    fallback=search_static_companies(zipcode,q,city,state)
     conn=dbconn()
-    if not conn:return [],False
+    if not conn:return fallback,False
     try:
         ensure(conn)
         where=['c.public_status=ANY(%s)'];params=[list(PUBLIC_COMPANY_STATUSES)]
@@ -245,6 +271,9 @@ def search_companies_db(zipcode='',q='',city='',state=''):
             rows=[]
             for raw in cur.fetchall():
                 item=rowdict(keys,raw);item['display_status']=company_status_label(item.get('public_status'));rows.append(item)
+            seen={company_key(item) for item in rows}
+            rows.extend(item for item in fallback if company_key(item) not in seen)
+            rows.sort(key=lambda item:(0 if item.get('public_status')=='verified' else 1,clean(item.get('company'),200).lower()))
             return rows,True
     finally:conn.close()
 
