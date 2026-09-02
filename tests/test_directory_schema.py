@@ -206,6 +206,24 @@ class DirectorySchemaTests(unittest.TestCase):
         cameron = {row['company'] for row in DIRECTORY.search_static_companies(city='Cameron', state='TX')}
         self.assertIn('Ables Top Hat Home Services', cameron)
 
+    def test_arizona_and_new_mexico_directory_expansion(self):
+        phoenix = {row['company'] for row in DIRECTORY.search_static_companies(city='Phoenix', state='AZ')}
+        self.assertIn('Arizona Chimney & Air Ducts', phoenix)
+        albuquerque = {row['company'] for row in DIRECTORY.search_static_companies(city='Albuquerque', state='NM')}
+        self.assertEqual(albuquerque, {
+            "Casey's Top Hat Chimney Sweeps",
+            "Shawn's Chimney Sweep & Stove Company",
+            'CBS Chimney Sweepers',
+        })
+        taos = {row['company'] for row in DIRECTORY.search_static_companies(city='Taos', state='NM')}
+        self.assertIn("Shawn's Chimney Sweep & Stove Company", taos)
+        truth_or_consequences = DIRECTORY.search_static_companies(city='Truth or Consequences', state='NM')
+        self.assertEqual([row['company'] for row in truth_or_consequences], ["Shawn's Chimney Sweep & Stove Company"])
+
+    def test_new_state_records_do_not_cross_match_texas(self):
+        self.assertEqual(DIRECTORY.search_static_companies(city='Phoenix', state='TX'), [])
+        self.assertEqual(DIRECTORY.search_static_companies(city='Albuquerque', state='TX'), [])
+
 
 if __name__ == '__main__':
     unittest.main()
