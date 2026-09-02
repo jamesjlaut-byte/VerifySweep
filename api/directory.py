@@ -14,6 +14,85 @@ OFFICIAL_SOURCES={
   'csia':'https://web.csia.org/CSIA-Certified',
   'nfi':'https://www.nficertified.org/search-instructor/'
 }
+NORMALIZED_DIRECTORY_SCHEMA=(
+  '''CREATE TABLE IF NOT EXISTS directory_companies (
+    id BIGSERIAL PRIMARY KEY, canonical_name TEXT NOT NULL, normalized_name TEXT NOT NULL,
+    website TEXT, normalized_domain TEXT, phone TEXT, normalized_phone TEXT,
+    address_line1 TEXT, address_line2 TEXT, city TEXT, state TEXT, postal_code TEXT, country_code TEXT NOT NULL DEFAULT 'US',
+    public_status TEXT NOT NULL DEFAULT 'unverified' CHECK (public_status IN ('unverified','verification_in_progress','verified','information_updated','not_eligible','removed')),
+    claim_status TEXT NOT NULL DEFAULT 'unclaimed' CHECK (claim_status IN ('unclaimed','claim_pending','claimed')),
+    last_reviewed_at TIMESTAMPTZ, verification_due_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_professionals (
+    id BIGSERIAL PRIMARY KEY, company_id BIGINT REFERENCES directory_companies(id) ON DELETE SET NULL,
+    professional_name TEXT NOT NULL, role_title TEXT, public_state TEXT NOT NULL DEFAULT 'pending' CHECK (public_state IN ('pending','active','inactive','removed')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_credentials (
+    id BIGSERIAL PRIMARY KEY, professional_id BIGINT NOT NULL REFERENCES directory_professionals(id) ON DELETE CASCADE,
+    issuer TEXT NOT NULL, credential_type TEXT NOT NULL, credential_number TEXT,
+    official_source_url TEXT, verification_status TEXT NOT NULL DEFAULT 'verification_needed' CHECK (verification_status IN ('verification_needed','verification_in_progress','verified_from_official_source','official_source_available','not_currently_confirmed','verification_update_needed')),
+    verified_at TIMESTAMPTZ, last_checked_at TIMESTAMPTZ, recheck_due_at TIMESTAMPTZ,
+    source_available BOOLEAN NOT NULL DEFAULT TRUE, source_note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_company_sources (
+    id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
+    source_type TEXT NOT NULL, source_url TEXT NOT NULL, source_record_id TEXT,
+    captured_at TIMESTAMPTZ NOT NULL, imported_at TIMESTAMPTZ NOT NULL DEFAULT now(), source_note TEXT
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_claims (
+    id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
+    claimant_user_id TEXT, claimant_name TEXT, claimant_email TEXT, evidence_reference TEXT,
+    review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending','needs_evidence','approved','rejected','withdrawn')),
+    reviewed_by TEXT, reviewed_at TIMESTAMPTZ, review_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_verification_events (
+    id BIGSERIAL PRIMARY KEY, company_id BIGINT REFERENCES directory_companies(id) ON DELETE SET NULL,
+    professional_id BIGINT REFERENCES directory_professionals(id) ON DELETE SET NULL,
+    credential_id BIGINT REFERENCES directory_credentials(id) ON DELETE SET NULL,
+    reviewer_id TEXT NOT NULL, action TEXT NOT NULL, reason_code TEXT, evidence_reference TEXT,
+    old_value JSONB, new_value JSONB, verification_standard_version TEXT, recheck_due_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_service_areas (
+    id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
+    postal_code TEXT, city TEXT, state TEXT, radius_miles INTEGER CHECK (radius_miles IS NULL OR radius_miles BETWEEN 1 AND 500),
+    source_reference TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (postal_code IS NOT NULL OR city IS NOT NULL)
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_audit_log (
+    id BIGSERIAL PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL,
+    old_value JSONB, new_value JSONB, reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE OR REPLACE FUNCTION verifysweep_prevent_event_mutation() RETURNS trigger AS $$
+    BEGIN RAISE EXCEPTION 'VerifySweep audit and verification events are append-only'; END;
+  $$ LANGUAGE plpgsql''',
+  '''DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='directory_verification_events_immutable') THEN
+      CREATE TRIGGER directory_verification_events_immutable BEFORE UPDATE OR DELETE ON directory_verification_events
+      FOR EACH ROW EXECUTE FUNCTION verifysweep_prevent_event_mutation();
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='directory_audit_log_immutable') THEN
+      CREATE TRIGGER directory_audit_log_immutable BEFORE UPDATE OR DELETE ON directory_audit_log
+      FOR EACH ROW EXECUTE FUNCTION verifysweep_prevent_event_mutation();
+    END IF;
+  END $$''',
+  'CREATE INDEX IF NOT EXISTS directory_companies_name_idx ON directory_companies (normalized_name)',
+  'CREATE INDEX IF NOT EXISTS directory_companies_domain_idx ON directory_companies (normalized_domain)',
+  'CREATE INDEX IF NOT EXISTS directory_companies_phone_idx ON directory_companies (normalized_phone)',
+  'CREATE INDEX IF NOT EXISTS directory_companies_geo_idx ON directory_companies (postal_code,state,city)',
+  'CREATE INDEX IF NOT EXISTS directory_companies_public_status_idx ON directory_companies (public_status)',
+  'CREATE INDEX IF NOT EXISTS directory_professionals_company_idx ON directory_professionals (company_id)',
+  'CREATE INDEX IF NOT EXISTS directory_credentials_professional_idx ON directory_credentials (professional_id)',
+  'CREATE INDEX IF NOT EXISTS directory_sources_company_idx ON directory_company_sources (company_id)',
+  'CREATE INDEX IF NOT EXISTS directory_claims_queue_idx ON directory_claims (review_status,created_at)',
+  'CREATE INDEX IF NOT EXISTS directory_verification_queue_idx ON directory_verification_events (created_at)',
+  'CREATE INDEX IF NOT EXISTS directory_service_area_zip_idx ON directory_service_areas (postal_code)',
+  'CREATE INDEX IF NOT EXISTS directory_audit_target_idx ON directory_audit_log (target_type,target_id,created_at)'
+)
 
 def clean(v,n=500): return re.sub(r'\s+',' ',str(v or '')).strip()[:n]
 def valid_zip(z): return bool(re.fullmatch(r'\d{5}',z or ''))
@@ -109,6 +188,7 @@ def ensure(conn):
         )''')
         cur.execute('CREATE INDEX IF NOT EXISTS pro_directory_zip_idx ON pro_directory (postal_code)')
         cur.execute('CREATE INDEX IF NOT EXISTS pro_directory_status_idx ON pro_directory (status)')
+        for statement in NORMALIZED_DIRECTORY_SCHEMA:cur.execute(statement)
     conn.commit()
 
 def status_for(row):
