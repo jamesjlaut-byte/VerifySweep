@@ -10,6 +10,13 @@ STATIC_RECORDS=os.path.join(ROOT,'data','certified-professionals.json')
 ZIP_CENTROIDS=os.path.join(ROOT,'data','us-zcta-centroids.tsv')
 PUBLISHED_STATUS='verified'
 ALLOWED_RADII={10,25,50,75,100}
+PUBLIC_COMPANY_STATUSES=('unverified','verification_in_progress','verified','information_updated')
+COMPANY_STATUS_LABELS={
+  'unverified':'UNVERIFIED',
+  'verification_in_progress':'VERIFICATION IN PROGRESS',
+  'verified':'VERIFIED',
+  'information_updated':'INFORMATION UPDATED / VERIFICATION NEEDED'
+}
 OFFICIAL_SOURCES={
   'csia':'https://web.csia.org/CSIA-Certified',
   'nfi':'https://www.nficertified.org/search-instructor/'
@@ -208,6 +215,39 @@ def status_for(row):
 
 def rowdict(keys,row):return dict(zip(keys,row))
 
+def company_status_label(status):return COMPANY_STATUS_LABELS.get(clean(status,60).lower(),'UNVERIFIED')
+
+def search_companies_db(zipcode='',q='',city='',state=''):
+    conn=dbconn()
+    if not conn:return [],False
+    try:
+        ensure(conn)
+        where=['c.public_status=ANY(%s)'];params=[list(PUBLIC_COMPANY_STATUSES)]
+        if q:
+            where.append('(c.canonical_name ILIKE %s OR COALESCE(c.normalized_domain,\'\') ILIKE %s)')
+            like=f'%{q}%';params.extend([like,like])
+        if zipcode:
+            where.append('''(c.postal_code=%s OR EXISTS (
+              SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.postal_code=%s
+            ))''');params.extend([zipcode,zipcode])
+        if city:
+            where.append('''(c.city ILIKE %s OR EXISTS (
+              SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.city ILIKE %s
+            ))''');params.extend([city,city])
+        if state:where.append('UPPER(c.state)=UPPER(%s)');params.append(state)
+        with conn.cursor() as cur:
+            cur.execute(f'''SELECT c.id,c.canonical_name,c.website,c.phone,c.city,c.state,c.postal_code,
+              c.public_status,c.claim_status,c.last_reviewed_at,c.verification_due_at
+              FROM directory_companies c WHERE {' AND '.join(where)}
+              ORDER BY CASE c.public_status WHEN 'verified' THEN 0 WHEN 'verification_in_progress' THEN 1 ELSE 2 END,
+              c.canonical_name LIMIT 100''',params)
+            keys=['id','company','website','phone','city','state','zip','public_status','claim_status','last_reviewed_at','verification_due_at']
+            rows=[]
+            for raw in cur.fetchall():
+                item=rowdict(keys,raw);item['display_status']=company_status_label(item.get('public_status'));rows.append(item)
+            return rows,True
+    finally:conn.close()
+
 def search_db(zipcode,q='',radius=25):
     conn=dbconn()
     if not conn:return search_static(zipcode,q,radius)
@@ -285,7 +325,16 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):self.send_response(204);self.send_header('Allow','GET, POST, OPTIONS');self.end_headers()
     def do_GET(self):
         try:
-            qs=parse_qs(urlparse(self.path).query);identifier=clean((qs.get('id') or [''])[0],30)
+            qs=parse_qs(urlparse(self.path).query);view=clean((qs.get('view') or ['professionals'])[0],30).lower()
+            if view=='companies':
+                z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40)
+                if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
+                if not any((z,q,city,state)):return self.sendj(400,{'error':'Search by ZIP, city, state, or business name.'})
+                results,connected=search_companies_db(z,q,city,state)
+                return self.sendj(200,{'results':results,'count':len(results),'database_connected':connected,'public_business_fields_only':True,
+                  'note':'UNVERIFIED means VerifySweep has not completed verification. It does not indicate fraud, misconduct, incompetence, or wrongdoing.'})
+            if view!='professionals':return self.sendj(400,{'error':'Choose a supported directory view.'})
+            identifier=clean((qs.get('id') or [''])[0],30)
             if identifier:
                 if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',identifier):return self.sendj(400,{'error':'Invalid professional record.'})
                 result=detail_db(int(identifier) if identifier.isdigit() else identifier);return self.sendj(200 if result else 404,{'result':result} if result else {'error':'Professional record not found.'})

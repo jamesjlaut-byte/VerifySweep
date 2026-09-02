@@ -68,6 +68,18 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn('directory_audit_log_immutable', sql)
         self.assertIn('BEFORE UPDATE OR DELETE', sql)
 
+    def test_company_status_labels_are_neutral(self):
+        self.assertEqual(DIRECTORY.company_status_label('unverified'), 'UNVERIFIED')
+        self.assertEqual(DIRECTORY.company_status_label('verification_in_progress'), 'VERIFICATION IN PROGRESS')
+        self.assertEqual(DIRECTORY.company_status_label('information_updated'), 'INFORMATION UPDATED / VERIFICATION NEEDED')
+        self.assertNotIn('fraud', ' '.join(DIRECTORY.COMPANY_STATUS_LABELS.values()).lower())
+
+    def test_only_publishable_company_states_are_searchable(self):
+        self.assertIn('unverified', DIRECTORY.PUBLIC_COMPANY_STATUSES)
+        self.assertIn('verified', DIRECTORY.PUBLIC_COMPANY_STATUSES)
+        self.assertNotIn('removed', DIRECTORY.PUBLIC_COMPANY_STATUSES)
+        self.assertNotIn('not_eligible', DIRECTORY.PUBLIC_COMPANY_STATUSES)
+
 
 if __name__ == '__main__':
     unittest.main()
