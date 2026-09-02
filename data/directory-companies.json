@@ -84,14 +84,16 @@
     {
       "company": "Absolute Chimney",
       "website": "https://www.absolutechimneyatx.com/",
-      "phone": "",
+      "phone": "(512) 529-6571",
       "city": "Austin",
       "state": "TX",
       "postal_code": "",
+      "service_areas": ["Austin", "Pflugerville", "Round Rock", "Cedar Park", "Leander", "Georgetown", "Manor", "Kyle", "Buda"],
       "source_type": "official_business_website",
       "source_url": "https://www.absolutechimneyatx.com/",
-      "captured_at": "2026-09-02T17:00:00Z",
-      "source_note": "The business website identifies Absolute Chimney and states that it serves Austin and surrounding communities."
+      "service_area_source_url": "https://www.absolutechimneyatx.com/",
+      "captured_at": "2026-09-02T20:00:00Z",
+      "source_note": "The business website identifies Absolute Chimney, publishes this business phone number, and names the included Austin-area communities it serves."
     },
     {
       "company": "Capitol Chimney + Fireplace Services",
@@ -100,10 +102,13 @@
       "city": "Austin",
       "state": "TX",
       "postal_code": "",
+      "service_areas": ["Austin", "Bee Cave", "Buda", "Bulverde", "Canyon Lake", "Cibolo", "Dripping Springs", "Gruene", "Kyle", "Lake McQueeney", "Live Oak", "Manor", "New Braunfels", "Pflugerville", "Round Rock", "San Marcos", "Schertz", "Seguin", "Selma", "Universal City", "Westlake Hills", "Wimberley"],
+      "service_zips": ["78132"],
       "source_type": "official_business_website",
       "source_url": "https://capitolchimney.com/",
-      "captured_at": "2026-09-02T17:00:00Z",
-      "source_note": "The business website identifies an Austin service location and publishes this Austin business phone number."
+      "service_area_source_url": "https://capitolchimney.com/our-locations/",
+      "captured_at": "2026-09-02T20:00:00Z",
+      "source_note": "The business website identifies Austin and New Braunfels service locations and names the included Central Texas service communities."
     },
     {
       "company": "Chimney-X",
@@ -136,10 +141,13 @@
       "city": "Austin",
       "state": "TX",
       "postal_code": "78752",
+      "service_areas": ["Houston", "Spring", "The Woodlands", "Cypress", "Kingwood", "Katy", "Sugar Land", "Conroe", "Humble", "Baytown", "Alvin", "Galveston", "Huntsville", "Navasota", "Brenham", "San Antonio", "New Braunfels", "Cibolo", "Schertz", "Seguin", "Converse", "Universal City", "China Grove", "Bandera", "Helotes", "Tyler", "Longview", "Lufkin", "Nacogdoches", "Whitehouse", "Austin", "Round Rock", "Cedar Park", "Georgetown", "San Marcos", "Pflugerville", "Leander", "Kyle", "Buda", "Lago Vista", "Dallas", "Fort Worth", "Corpus Christi", "McAllen", "Edinburg"],
+      "service_zips": ["77073", "75219", "78752", "78413", "78542", "78205", "75702"],
       "source_type": "official_business_website",
       "source_url": "https://www.harkyschimney.com/",
-      "captured_at": "2026-09-02T17:00:00Z",
-      "source_note": "The business website publishes an Austin service location and this public business phone number. No company-wide credential status is inferred."
+      "service_area_source_url": "https://www.harkyschimney.com/service-area-houston",
+      "captured_at": "2026-09-02T20:00:00Z",
+      "source_note": "The business website publishes multiple Texas contact locations and names the included Texas service communities. No company-wide credential status is inferred."
     },
     {
       "company": "Santa Chimney Sweep",
@@ -148,10 +156,12 @@
       "city": "Austin",
       "state": "TX",
       "postal_code": "78752",
+      "service_areas": ["Austin", "Bastrop", "Cedar Creek", "Dripping Springs", "Elgin", "Hutto", "Jollyville", "Lakeway", "Leander", "Liberty Hill", "Manor", "Norman Crossing", "San Marcos", "Temple", "Pflugerville", "Georgetown", "Buda", "Round Rock"],
       "source_type": "official_business_website",
       "source_url": "https://www.santachimneys.com/",
-      "captured_at": "2026-09-02T17:00:00Z",
-      "source_note": "The business website publishes an Austin location, chimney and fireplace services, and this public business phone number."
+      "service_area_source_url": "https://www.santachimneys.com/austin-services/",
+      "captured_at": "2026-09-02T20:00:00Z",
+      "source_note": "The business website publishes an Austin location and names the included Austin-area service communities. Suspected spelling errors from an older page were not imported."
     }
   ]
 }

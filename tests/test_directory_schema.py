@@ -93,6 +93,8 @@ class DirectorySchemaTests(unittest.TestCase):
     def test_static_company_projection_supports_location_search(self):
         new_braunfels = DIRECTORY.search_static_companies(city='New Braunfels',state='TX')
         self.assertEqual({row['company'] for row in new_braunfels}, {
+            'Capitol Chimney + Fireplace Services',
+            "Harky's Chimney & Home Services",
             'Hill Country Air Duct And Chimney Sweeps LLC',
             'Wolfman Chimney & Fireplace',
         })
@@ -157,6 +159,19 @@ class DirectorySchemaTests(unittest.TestCase):
         austin = {row['company'] for row in DIRECTORY.search_static_companies(city='Austin', state='TX')}
         self.assertIn('Top Hat Chimney Sweeps', austin)
         self.assertIn('Ables Top Hat Home Services', austin)
+
+    def test_existing_austin_records_gain_sourced_service_coverage(self):
+        cedar_park = {row['company'] for row in DIRECTORY.search_static_companies(city='Cedar Park', state='TX')}
+        self.assertIn('Absolute Chimney', cedar_park)
+        self.assertIn("Harky's Chimney & Home Services", cedar_park)
+        cibolo = {row['company'] for row in DIRECTORY.search_static_companies(city='Cibolo', state='TX')}
+        self.assertIn('Capitol Chimney + Fireplace Services', cibolo)
+        temple = {row['company'] for row in DIRECTORY.search_static_companies(city='Temple', state='TX')}
+        self.assertIn('Santa Chimney Sweep', temple)
+
+    def test_vague_surrounding_area_claim_does_not_create_guessed_cities(self):
+        hammond = DIRECTORY.search_static_companies(q='Hammond Fireplace')
+        self.assertEqual(hammond[0]['service_areas'], [])
 
 
 if __name__ == '__main__':
