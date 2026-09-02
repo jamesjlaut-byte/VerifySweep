@@ -95,6 +95,17 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(len(DIRECTORY.search_static_companies(zipcode='78070')), 1)
         self.assertEqual(DIRECTORY.search_static_companies(zipcode='00000'), [])
 
+    def test_independent_company_records_make_austin_searchable(self):
+        rows = DIRECTORY.search_static_companies(q='Austin, TX')
+        self.assertGreaterEqual(len(rows), 6)
+        self.assertTrue(all(row['city'] == 'Austin' and row['state'] == 'TX' for row in rows))
+        self.assertTrue(all(row['display_status'] == 'UNVERIFIED' for row in rows))
+        self.assertTrue(all(row.get('source_url') for row in rows))
+
+    def test_company_discovery_does_not_create_professional_credentials(self):
+        company = DIRECTORY.search_static_companies(q='Absolute Chimney')[0]
+        self.assertEqual(DIRECTORY.company_professionals(company), [])
+
     def test_company_professionals_remain_named_individual_records(self):
         company = DIRECTORY.search_static_companies(q='Wolfman')[0]
         rows = DIRECTORY.company_professionals(company)

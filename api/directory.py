@@ -7,6 +7,7 @@ from urllib.parse import urlparse, parse_qs
 DB=os.environ.get('DATABASE_URL','')
 ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_RECORDS=os.path.join(ROOT,'data','certified-professionals.json')
+STATIC_COMPANIES=os.path.join(ROOT,'data','directory-companies.json')
 ZIP_CENTROIDS=os.path.join(ROOT,'data','us-zcta-centroids.tsv')
 PUBLISHED_STATUS='verified'
 ALLOWED_RADII={10,25,50,75,100}
@@ -121,6 +122,14 @@ def static_records():
     except (OSError,ValueError):return []
 
 @lru_cache(maxsize=1)
+def static_company_records():
+    try:
+        with open(STATIC_COMPANIES,encoding='utf-8') as source:
+            payload=json.load(source)
+        return payload.get('records',[]) if isinstance(payload,dict) else []
+    except (OSError,ValueError):return []
+
+@lru_cache(maxsize=1)
 def zip_centroids():
     points={}
     try:
@@ -221,10 +230,11 @@ def company_key(item):
     return (clean(item.get('company'),200).lower(),clean(item.get('zip'),5))
 
 def search_static_companies(zipcode='',q='',city='',state=''):
-    groups={};needle=clean(q,120).lower();city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
-    for source in static_records():
-        company=clean(source.get('company'),200);company_city=clean(source.get('city'),120);company_state=clean(source.get('state'),40);company_zip=clean(source.get('zip'),5)
-        if needle and needle not in company.lower():continue
+    groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
+    for source in [*static_company_records(),*static_records()]:
+        company=clean(source.get('company'),200);company_city=clean(source.get('city'),120);company_state=clean(source.get('state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
+        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000))).lower()
+        if needle_tokens and not all(token in searchable for token in needle_tokens):continue
         if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
         if city_needle and city_needle not in company_city.lower():continue
         if state_needle and state_needle!=company_state.lower():continue
@@ -233,13 +243,15 @@ def search_static_companies(zipcode='',q='',city='',state=''):
           'id':'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
           'company':company,'website':clean(source.get('website'),1000),'phone':clean(source.get('phone'),80),
           'city':company_city,'state':company_state,'zip':company_zip,'public_status':'unverified','claim_status':'unclaimed',
-          'last_reviewed_at':clean(source.get('last_checked_at'),40) or None,'verification_due_at':None,
+          'last_reviewed_at':clean(source.get('last_checked_at') or source.get('captured_at'),40) or None,'verification_due_at':None,
+          'source_type':clean(source.get('source_type'),80) or 'credential_directory_record','source_url':clean(source.get('source_url') or source.get('source'),1000),
           'display_status':'UNVERIFIED'
         })
-        checked=clean(source.get('last_checked_at'),40)
+        checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
         if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
         if not item['website'] and source.get('website'):item['website']=clean(source.get('website'),1000)
         if not item['phone'] and source.get('phone'):item['phone']=clean(source.get('phone'),80)
+        if not item['source_url'] and (source.get('source_url') or source.get('source')):item['source_url']=clean(source.get('source_url') or source.get('source'),1000)
     return sorted(groups.values(),key=lambda item:item['company'].lower())
 
 def company_professionals(company):
@@ -266,8 +278,8 @@ def search_companies_db(zipcode='',q='',city='',state=''):
         ensure(conn)
         where=['c.public_status=ANY(%s)'];params=[list(PUBLIC_COMPANY_STATUSES)]
         if q:
-            where.append('(c.canonical_name ILIKE %s OR COALESCE(c.normalized_domain,\'\') ILIKE %s)')
-            like=f'%{q}%';params.extend([like,like])
+            where.append('(c.canonical_name ILIKE %s OR COALESCE(c.normalized_domain,\'\') ILIKE %s OR COALESCE(c.city,\'\') ILIKE %s OR COALESCE(c.state,\'\') ILIKE %s OR COALESCE(c.postal_code,\'\') ILIKE %s)')
+            like=f'%{q}%';params.extend([like,like,like,like,like])
         if zipcode:
             where.append('''(c.postal_code=%s OR EXISTS (
               SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.postal_code=%s
