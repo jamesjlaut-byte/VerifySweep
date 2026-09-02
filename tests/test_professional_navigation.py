@@ -67,7 +67,7 @@ class ProfessionalNavigationTests(unittest.TestCase):
             pages.append(path.name)
             self.assertEqual(parser.links, EXPECTED, path.name)
             self.assertNotIn('/start-investigation.html', parser.links, path.name)
-        self.assertEqual(len(pages), 26)
+        self.assertEqual(len(pages), 47)
 
     def test_internal_professional_destinations_exist(self):
         for href in EXPECTED:
@@ -89,7 +89,7 @@ class ProfessionalNavigationTests(unittest.TestCase):
             for href in required:
                 self.assertIn(href, parser.links, f'{path.name}: {href}')
             self.assertNotIn('/ai-fraudwatch.html', parser.links, path.name)
-        self.assertEqual(len(pages), 22)
+        self.assertEqual(len(pages), 26)
 
 
 if __name__ == '__main__':
