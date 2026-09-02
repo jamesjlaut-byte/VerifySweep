@@ -95,6 +95,14 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(len(DIRECTORY.search_static_companies(zipcode='78070')), 1)
         self.assertEqual(DIRECTORY.search_static_companies(zipcode='00000'), [])
 
+    def test_company_professionals_remain_named_individual_records(self):
+        company = DIRECTORY.search_static_companies(q='Wolfman')[0]
+        rows = DIRECTORY.company_professionals(company)
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(row.get('holder') for row in rows))
+        self.assertTrue(all(row['display_status'] == 'VERIFIED FROM OFFICIAL SOURCE' for row in rows))
+        self.assertEqual(company['display_status'], 'UNVERIFIED')
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -242,6 +242,22 @@ def search_static_companies(zipcode='',q='',city='',state=''):
         if not item['phone'] and source.get('phone'):item['phone']=clean(source.get('phone'),80)
     return sorted(groups.values(),key=lambda item:item['company'].lower())
 
+def company_professionals(company):
+    rows=[]
+    for source in static_records():
+        if company_key(source)!=company_key(company):continue
+        item={k:source.get(k) for k in ('id','holder','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available')}
+        item['display_status'],item['status_note']=static_status(source);rows.append(item)
+    return sorted(rows,key=lambda item:(clean(item.get('holder'),200),clean(item.get('credential'),200)))
+
+def detail_company(identifier):
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}',identifier or ''):return None,False
+    rows,connected=search_companies_db()
+    company=next((item for item in rows if str(item.get('id'))==str(identifier)),None)
+    if not company:return None,connected
+    company=dict(company);company['professionals']=company_professionals(company)
+    return company,connected
+
 def search_companies_db(zipcode='',q='',city='',state=''):
     fallback=search_static_companies(zipcode,q,city,state)
     conn=dbconn()
@@ -356,6 +372,10 @@ class handler(BaseHTTPRequestHandler):
         try:
             qs=parse_qs(urlparse(self.path).query);view=clean((qs.get('view') or ['professionals'])[0],30).lower()
             if view=='companies':
+                identifier=clean((qs.get('id') or [''])[0],160)
+                if identifier:
+                    result,connected=detail_company(identifier)
+                    return self.sendj(200 if result else 404,{'result':result,'database_connected':connected,'public_business_fields_only':True} if result else {'error':'Company record not found.'})
                 z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40)
                 if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
                 if not any((z,q,city,state)):return self.sendj(400,{'error':'Search by ZIP, city, state, or business name.'})
