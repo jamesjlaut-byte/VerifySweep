@@ -141,6 +141,23 @@ class DirectorySchemaTests(unittest.TestCase):
         rows = DIRECTORY.search_static_companies(q='Cedar Park TX')
         self.assertTrue(any(row['company'].startswith('Hill Country') for row in rows))
 
+    def test_wolfman_matches_published_austin_service_area(self):
+        rows = DIRECTORY.search_static_companies(city='Austin', state='TX')
+        wolfman = next(row for row in rows if row['company'] == 'Wolfman Chimney & Fireplace')
+        self.assertEqual(wolfman['city'], 'New Braunfels')
+        self.assertEqual(wolfman['matched_service_area'], 'Austin')
+        self.assertIn('Bastrop', wolfman['service_areas'])
+        self.assertEqual(len(DIRECTORY.company_professionals(wolfman)), 2)
+
+    def test_top_hat_and_ables_are_searchable_across_published_areas(self):
+        hutto = DIRECTORY.search_static_companies(city='Hutto', state='TX')
+        self.assertTrue(any(row['company'] == 'Top Hat Chimney Sweeps' for row in hutto))
+        temple = DIRECTORY.search_static_companies(city='Temple', state='TX')
+        self.assertTrue(any(row['company'] == 'Ables Top Hat Home Services' for row in temple))
+        austin = {row['company'] for row in DIRECTORY.search_static_companies(city='Austin', state='TX')}
+        self.assertIn('Top Hat Chimney Sweeps', austin)
+        self.assertIn('Ables Top Hat Home Services', austin)
+
 
 if __name__ == '__main__':
     unittest.main()
