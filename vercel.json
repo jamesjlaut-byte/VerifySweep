@@ -7,7 +7,6 @@
     {"source":"/index\\(20260831-180213\\).html","destination":"/","permanent":true},
     {"source":"/index\\(20260831-184305\\).html","destination":"/","permanent":true},
     {"source":"/professionals.html","destination":"/professional.html","permanent":true},
-    {"source":"/investigations.html","destination":"/pro-dashboard.html","permanent":true},
     {"source":"/resources.html","destination":"/education.html","permanent":true},
     {"source":"/login.html","destination":"/pro-dashboard.html","permanent":true}
   ],
