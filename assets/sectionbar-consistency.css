@@ -1,0 +1,14 @@
+.sectionbar a,
+.sectionbar a:visited,
+.sectionbar a[aria-current]{
+  background:#f36b10!important;
+  color:#ffffff!important;
+  border:1px solid #f36b10!important;
+  border-radius:8px!important;
+}
+.sectionbar a:hover,
+.sectionbar a:focus-visible{
+  background:#050505!important;
+  border-color:#050505!important;
+  color:#ffffff!important;
+}

@@ -56,6 +56,16 @@ class MenuParser(HTMLParser):
 
 
 class ProfessionalNavigationTests(unittest.TestCase):
+    def test_all_live_section_bars_use_shared_orange_button_treatment(self):
+        pages = []
+        for path in ROOT.glob('*.html'):
+            text = path.read_text(encoding='utf-8')
+            if 'class="sectionbar"' not in text:
+                continue
+            pages.append(path.name)
+            self.assertIn('/assets/sectionbar-consistency.css', text, path.name)
+        self.assertEqual(len(pages), 58)
+
     def test_every_professional_section_bar_uses_the_same_destinations(self):
         pages = []
         for path in ROOT.glob('*.html'):
@@ -67,7 +77,7 @@ class ProfessionalNavigationTests(unittest.TestCase):
             pages.append(path.name)
             self.assertEqual(parser.links, EXPECTED, path.name)
             self.assertNotIn('/start-investigation.html', parser.links, path.name)
-        self.assertEqual(len(pages), 47)
+        self.assertEqual(len(pages), 51)
 
     def test_internal_professional_destinations_exist(self):
         for href in EXPECTED:
