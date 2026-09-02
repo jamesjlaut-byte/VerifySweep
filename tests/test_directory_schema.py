@@ -173,6 +173,22 @@ class DirectorySchemaTests(unittest.TestCase):
         hammond = DIRECTORY.search_static_companies(q='Hammond Fireplace')
         self.assertEqual(hammond[0]['service_areas'], [])
 
+    def test_multi_state_service_locations_filter_by_their_own_state(self):
+        denver = DIRECTORY.search_static_companies(city='Denver', state='CO')
+        self.assertEqual([row['company'] for row in denver], ['Masters Services'])
+        self.assertEqual(denver[0]['matched_service_state'], 'CO')
+        self.assertEqual(DIRECTORY.search_static_companies(city='Denver', state='TX'), [])
+        lake_charles = DIRECTORY.search_static_companies(city='Lake Charles', state='LA')
+        self.assertEqual([row['company'] for row in lake_charles], ['Lords Chimney'])
+
+    def test_new_regional_companies_are_searchable_by_published_city(self):
+        houston = {row['company'] for row in DIRECTORY.search_static_companies(city='Houston', state='TX')}
+        self.assertIn('Lords Chimney', houston)
+        longview = {row['company'] for row in DIRECTORY.search_static_companies(city='Longview', state='TX')}
+        self.assertIn("Jason's Chimney Sweep", longview)
+        boerne = {row['company'] for row in DIRECTORY.search_static_companies(city='Boerne', state='TX')}
+        self.assertIn('Clean as a Whistle Chimney Sweep', boerne)
+
 
 if __name__ == '__main__':
     unittest.main()

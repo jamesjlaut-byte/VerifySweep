@@ -239,16 +239,33 @@ def service_counties_for(item):
     if not isinstance(values,list):return []
     return [clean(value,120) for value in values if clean(value,120)]
 
+def service_locations_for(item,fallback_state=''):
+    rows=[];seen=set()
+    for value in item.get('service_locations') or []:
+        if not isinstance(value,dict):continue
+        city=clean(value.get('city'),120);state=clean(value.get('state'),40) or fallback_state
+        if not city:continue
+        key=(city.lower(),state.lower())
+        if key not in seen:rows.append({'city':city,'state':state});seen.add(key)
+    for city in service_areas_for(item):
+        key=(city.lower(),fallback_state.lower())
+        if key not in seen:rows.append({'city':city,'state':fallback_state});seen.add(key)
+    return rows
+
 def search_static_companies(zipcode='',q='',city='',state=''):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
     for source in [*static_company_records(),*static_records()]:
         company=clean(source.get('company'),200);company_city=clean(source.get('city'),120);company_state=clean(source.get('state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
-        service_areas=service_areas_for(source);service_counties=service_counties_for(source);service_area_names=' '.join([*service_areas,*service_counties])
+        service_locations=service_locations_for(source,company_state);service_areas=[location['city'] for location in service_locations];service_counties=service_counties_for(source);service_area_names=' '.join([*(location['city']+' '+location['state'] for location in service_locations),*service_counties])
         searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names)).lower()
         if needle_tokens and not all(token in searchable for token in needle_tokens):continue
         if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
-        if city_needle and city_needle!=company_city.lower() and city_needle not in [area.lower() for area in service_areas]:continue
-        if state_needle and state_needle!=company_state.lower():continue
+        location_matches_city=[location for location in service_locations if location['city'].lower()==city_needle]
+        if city_needle and city_needle!=company_city.lower() and not location_matches_city:continue
+        if state_needle:
+            office_matches=(not city_needle or city_needle==company_city.lower()) and state_needle==company_state.lower()
+            service_matches=any((not city_needle or location['city'].lower()==city_needle) and location['state'].lower()==state_needle for location in service_locations)
+            if not office_matches and not service_matches:continue
         key=(company.lower(),company_zip)
         item=groups.setdefault(key,{
           'id':'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
@@ -256,7 +273,8 @@ def search_static_companies(zipcode='',q='',city='',state=''):
           'city':company_city,'state':company_state,'zip':company_zip,'public_status':'unverified','claim_status':'unclaimed',
           'last_reviewed_at':clean(source.get('last_checked_at') or source.get('captured_at'),40) or None,'verification_due_at':None,
           'source_type':clean(source.get('source_type'),80) or 'credential_directory_record','source_url':clean(source.get('source_url') or source.get('source'),1000),
-          'service_areas':service_areas,'service_counties':service_counties,'service_area_source_url':clean(source.get('service_area_source_url'),1000),
+          'service_areas':service_areas,'service_locations':service_locations,'service_area_labels':[location['city']+', '+location['state'] if location['state'] else location['city'] for location in service_locations],
+          'service_counties':service_counties,'service_area_source_url':clean(source.get('service_area_source_url'),1000),
           'history_note':clean(source.get('history_note'),500),'recognition_source_url':clean(source.get('recognition_source_url'),1000),
           'display_status':'UNVERIFIED'
         })
@@ -266,11 +284,15 @@ def search_static_companies(zipcode='',q='',city='',state=''):
         if not item['phone'] and source.get('phone'):item['phone']=clean(source.get('phone'),80)
         if not item['source_url'] and (source.get('source_url') or source.get('source')):item['source_url']=clean(source.get('source_url') or source.get('source'),1000)
         if service_areas:item['service_areas']=sorted(set([*item.get('service_areas',[]),*service_areas]),key=str.lower)
+        if service_locations:
+            combined={(location['city'].lower(),location['state'].lower()):location for location in [*item.get('service_locations',[]),*service_locations]}
+            item['service_locations']=sorted(combined.values(),key=lambda location:(location['state'].lower(),location['city'].lower()))
+            item['service_area_labels']=[location['city']+', '+location['state'] if location['state'] else location['city'] for location in item['service_locations']]
         if service_counties:item['service_counties']=sorted(set([*item.get('service_counties',[]),*service_counties]),key=str.lower)
         for field in ('service_area_source_url','history_note','recognition_source_url'):
             if not item.get(field) and source.get(field):item[field]=clean(source.get(field),1000 if field.endswith('_url') else 500)
-        matched=next((area for area in service_areas if area.lower()==city_needle),None) if city_needle else None
-        if matched:item['matched_service_area']=matched
+        matched=next((location for location in service_locations if location['city'].lower()==city_needle and (not state_needle or location['state'].lower()==state_needle)),None) if city_needle else None
+        if matched:item['matched_service_area']=matched['city'];item['matched_service_state']=matched['state']
     return sorted(groups.values(),key=lambda item:item['company'].lower())
 
 def company_professionals(company):
