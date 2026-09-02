@@ -229,14 +229,20 @@ def company_status_label(status):return COMPANY_STATUS_LABELS.get(clean(status,6
 def company_key(item):
     return (clean(item.get('company'),200).lower(),clean(item.get('zip'),5))
 
+def service_areas_for(item):
+    values=item.get('service_areas') or []
+    if not isinstance(values,list):return []
+    return [clean(value,120) for value in values if clean(value,120)]
+
 def search_static_companies(zipcode='',q='',city='',state=''):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
     for source in [*static_company_records(),*static_records()]:
         company=clean(source.get('company'),200);company_city=clean(source.get('city'),120);company_state=clean(source.get('state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
-        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000))).lower()
+        service_areas=service_areas_for(source);service_area_names=' '.join(service_areas)
+        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names)).lower()
         if needle_tokens and not all(token in searchable for token in needle_tokens):continue
         if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
-        if city_needle and city_needle not in company_city.lower():continue
+        if city_needle and city_needle!=company_city.lower() and city_needle not in [area.lower() for area in service_areas]:continue
         if state_needle and state_needle!=company_state.lower():continue
         key=(company.lower(),company_zip)
         item=groups.setdefault(key,{
@@ -245,6 +251,8 @@ def search_static_companies(zipcode='',q='',city='',state=''):
           'city':company_city,'state':company_state,'zip':company_zip,'public_status':'unverified','claim_status':'unclaimed',
           'last_reviewed_at':clean(source.get('last_checked_at') or source.get('captured_at'),40) or None,'verification_due_at':None,
           'source_type':clean(source.get('source_type'),80) or 'credential_directory_record','source_url':clean(source.get('source_url') or source.get('source'),1000),
+          'service_areas':service_areas,'service_area_source_url':clean(source.get('service_area_source_url'),1000),
+          'history_note':clean(source.get('history_note'),500),'recognition_source_url':clean(source.get('recognition_source_url'),1000),
           'display_status':'UNVERIFIED'
         })
         checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
@@ -252,6 +260,11 @@ def search_static_companies(zipcode='',q='',city='',state=''):
         if not item['website'] and source.get('website'):item['website']=clean(source.get('website'),1000)
         if not item['phone'] and source.get('phone'):item['phone']=clean(source.get('phone'),80)
         if not item['source_url'] and (source.get('source_url') or source.get('source')):item['source_url']=clean(source.get('source_url') or source.get('source'),1000)
+        if service_areas:item['service_areas']=sorted(set([*item.get('service_areas',[]),*service_areas]),key=str.lower)
+        for field in ('service_area_source_url','history_note','recognition_source_url'):
+            if not item.get(field) and source.get(field):item[field]=clean(source.get(field),1000 if field.endswith('_url') else 500)
+        matched=next((area for area in service_areas if area.lower()==city_needle),None) if city_needle else None
+        if matched:item['matched_service_area']=matched
     return sorted(groups.values(),key=lambda item:item['company'].lower())
 
 def company_professionals(company):

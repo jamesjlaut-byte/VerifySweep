@@ -4,6 +4,38 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "company": "Hill Country Air Duct And Chimney Sweeps LLC",
+      "website": "https://hillcountrysweeps.com/",
+      "phone": "(888) 793-3789",
+      "city": "Spring Branch",
+      "state": "TX",
+      "postal_code": "78070",
+      "service_areas": ["Austin", "Cedar Park", "Leander", "Marble Falls", "Spicewood", "Lago Vista", "Jonestown", "Lakeway", "Bee Cave", "Dripping Springs", "Manchaca", "Buda", "Kyle", "Wimberley", "Canyon Lake", "San Marcos", "Seguin", "Schertz", "Converse", "New Braunfels", "Boerne", "Bulverde", "Blanco", "Johnson City", "Spring Branch", "San Antonio"],
+      "service_zips": ["78750", "78070", "78260"],
+      "source_type": "official_business_website",
+      "source_url": "https://hillcountrysweeps.com/",
+      "service_area_source_url": "https://hillcountrysweeps.com/",
+      "captured_at": "2026-09-02T18:00:00Z",
+      "source_note": "The business website publishes Spring Branch as a location and lists the included Central Texas cities as service areas. A service-area match is not presented as a physical office.",
+      "history_note": "The company website publishes service locations for Austin, Spring Branch, and San Antonio."
+    },
+    {
+      "company": "Black Velvet Chimney",
+      "website": "https://www.bvchimney.com/",
+      "phone": "(817) 473-4466",
+      "city": "Mansfield",
+      "state": "TX",
+      "postal_code": "76063",
+      "service_areas": ["Arlington", "Azle", "Bedford", "Colleyville", "Crowley", "Euless", "Grapevine", "Haslet", "Hurst", "Kennedale", "Mansfield", "Southlake", "Fort Worth", "Haltom City", "North Richland Hills", "Keller", "Burleson", "Itasca", "Abbott", "Aquilla", "Blum", "Brandon", "Bynum", "Covington", "Hillsboro", "Hubbard", "Irene", "Malone", "Mertens", "Mount Calm", "Penelope", "Whitney", "Carrollton", "Flower Mound", "Lewisville", "Frisco", "The Colony", "Lake Dallas", "Little Elm", "Denton", "Justin", "Krum", "Pilot Point", "Ponder", "Roanoke", "Sanger", "Argyle", "Aubrey", "Boyd", "Newark", "Paradise", "Rhome", "Alvord", "Decatur", "Greenwood", "Slidell", "Bridgeport", "Chico", "Frankston", "Neches", "Palestine", "Cayuga", "Elkhart", "Montalba", "Tennessee Colony", "Donie", "Fairfield", "Kirvin", "Streetman", "Teague", "Wortham"],
+      "source_type": "official_business_website",
+      "source_url": "https://www.bvchimney.com/",
+      "service_area_source_url": "https://www.bvchimney.com/about/service-area/",
+      "recognition_source_url": "https://www.bvchimney.com/about/",
+      "captured_at": "2026-09-02T18:00:00Z",
+      "source_note": "The business website publishes Mansfield contact information and lists the included North and East Texas communities as service areas. A service-area match is not presented as a physical office.",
+      "history_note": "Family-owned and operated since 1983; the company reports more than 40 years serving the Dallas-Fort Worth area."
+    },
+    {
       "company": "Absolute Chimney",
       "website": "https://www.absolutechimneyatx.com/",
       "phone": "",

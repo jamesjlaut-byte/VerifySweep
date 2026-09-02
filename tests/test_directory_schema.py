@@ -91,14 +91,19 @@ class DirectorySchemaTests(unittest.TestCase):
             self.assertNotIn(private_or_individual_field, rows[0])
 
     def test_static_company_projection_supports_location_search(self):
-        self.assertEqual(len(DIRECTORY.search_static_companies(city='New Braunfels',state='TX')), 1)
+        new_braunfels = DIRECTORY.search_static_companies(city='New Braunfels',state='TX')
+        self.assertEqual({row['company'] for row in new_braunfels}, {
+            'Hill Country Air Duct And Chimney Sweeps LLC',
+            'Wolfman Chimney & Fireplace',
+        })
         self.assertEqual(len(DIRECTORY.search_static_companies(zipcode='78070')), 1)
         self.assertEqual(DIRECTORY.search_static_companies(zipcode='00000'), [])
 
     def test_independent_company_records_make_austin_searchable(self):
         rows = DIRECTORY.search_static_companies(q='Austin, TX')
-        self.assertGreaterEqual(len(rows), 6)
-        self.assertTrue(all(row['city'] == 'Austin' and row['state'] == 'TX' for row in rows))
+        self.assertGreaterEqual(len(rows), 7)
+        self.assertTrue(all(row['state'] == 'TX' for row in rows))
+        self.assertTrue(any(row['company'].startswith('Hill Country') for row in rows))
         self.assertTrue(all(row['display_status'] == 'UNVERIFIED' for row in rows))
         self.assertTrue(all(row.get('source_url') for row in rows))
 
@@ -113,6 +118,28 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertTrue(all(row.get('holder') for row in rows))
         self.assertTrue(all(row['display_status'] == 'VERIFIED FROM OFFICIAL SOURCE' for row in rows))
         self.assertEqual(company['display_status'], 'UNVERIFIED')
+
+    def test_hill_country_matches_published_service_areas(self):
+        rows = DIRECTORY.search_static_companies(city='Austin', state='TX')
+        hill_country = next(row for row in rows if row['company'].startswith('Hill Country'))
+        self.assertEqual(hill_country['city'], 'Spring Branch')
+        self.assertEqual(hill_country['matched_service_area'], 'Austin')
+        self.assertIn('San Antonio', hill_country['service_areas'])
+        self.assertEqual(hill_country['display_status'], 'UNVERIFIED')
+
+    def test_black_velvet_service_area_and_named_credential_stay_separate(self):
+        rows = DIRECTORY.search_static_companies(city='Fort Worth', state='TX')
+        black_velvet = next(row for row in rows if row['company'] == 'Black Velvet Chimney')
+        self.assertEqual(black_velvet['matched_service_area'], 'Fort Worth')
+        self.assertIn('more than 40 years', black_velvet['history_note'])
+        professionals = DIRECTORY.company_professionals(black_velvet)
+        self.assertEqual([person['holder'] for person in professionals], ['Pete Pohlman'])
+        self.assertEqual(professionals[0]['display_status'], 'VERIFIED FROM OFFICIAL SOURCE')
+        self.assertEqual(black_velvet['display_status'], 'UNVERIFIED')
+
+    def test_free_text_location_search_includes_service_areas(self):
+        rows = DIRECTORY.search_static_companies(q='Cedar Park TX')
+        self.assertTrue(any(row['company'].startswith('Hill Country') for row in rows))
 
 
 if __name__ == '__main__':

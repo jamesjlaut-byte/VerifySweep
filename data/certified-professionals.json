@@ -1,8 +1,28 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-01",
+  "updated_at": "2026-09-02",
   "source_policy": "Named professional records are reviewed individually. No company-wide credential is inferred, and street addresses are not republished.",
   "records": [
+    {
+      "id": "fire-pete-pohlman",
+      "company": "Black Velvet Chimney",
+      "holder": "Pete Pohlman",
+      "credential": "Certified Inspector / Technician",
+      "credential_type": "F.I.R.E. Certified Inspector / Technician",
+      "issuer": "F.I.R.E.",
+      "source": "https://f-i-r-e-service.com/certified_inspectors_TX.php",
+      "city": "Mansfield",
+      "state": "TX",
+      "zip": "76063",
+      "website": "https://www.bvchimney.com/",
+      "phone": "(817) 473-4466",
+      "verification_status": "verified_from_official_source",
+      "verified_at": "2026-09-02T18:00:00Z",
+      "last_checked_at": "2026-09-02T18:00:00Z",
+      "recheck_due_at": "2026-12-02T18:00:00Z",
+      "source_available": true,
+      "source_note": "Pete Pohlman and Black Velvet Chimney are shown in Mansfield on the linked official F.I.R.E. Texas certified inspectors and technicians directory."
+    },
     {
       "id": 18867,
       "company": "Hill Country Air Duct And Chimney Sweeps LLC",
