@@ -175,8 +175,8 @@ class DirectorySchemaTests(unittest.TestCase):
 
     def test_multi_state_service_locations_filter_by_their_own_state(self):
         denver = DIRECTORY.search_static_companies(city='Denver', state='CO')
-        self.assertEqual([row['company'] for row in denver], ['Masters Services'])
-        self.assertEqual(denver[0]['matched_service_state'], 'CO')
+        self.assertEqual({row['company'] for row in denver}, {"Anthony's Chimney Sweep", 'Masters Services'})
+        self.assertTrue(all(row['matched_service_state'] == 'CO' for row in denver))
         self.assertEqual(DIRECTORY.search_static_companies(city='Denver', state='TX'), [])
         lake_charles = DIRECTORY.search_static_companies(city='Lake Charles', state='LA')
         self.assertEqual([row['company'] for row in lake_charles], ['Lords Chimney'])
@@ -223,6 +223,19 @@ class DirectorySchemaTests(unittest.TestCase):
     def test_new_state_records_do_not_cross_match_texas(self):
         self.assertEqual(DIRECTORY.search_static_companies(city='Phoenix', state='TX'), [])
         self.assertEqual(DIRECTORY.search_static_companies(city='Albuquerque', state='TX'), [])
+
+    def test_colorado_and_missouri_directory_expansion(self):
+        colorado_springs = {row['company'] for row in DIRECTORY.search_static_companies(city='Colorado Springs', state='CO')}
+        self.assertIn("Anthony's Chimney Sweep", colorado_springs)
+        st_louis = {row['company'] for row in DIRECTORY.search_static_companies(city='St. Louis', state='MO')}
+        self.assertEqual(st_louis, {'Clean Sweep Chimney Service', 'English Sweep, Inc.', 'Friendly Fire LLC'})
+
+    def test_illinois_service_locations_match_their_own_state(self):
+        waterloo = DIRECTORY.search_static_companies(city='Waterloo', state='IL')
+        self.assertEqual([row['company'] for row in waterloo], ['English Sweep, Inc.'])
+        belleville = DIRECTORY.search_static_companies(city='Belleville', state='IL')
+        self.assertEqual([row['company'] for row in belleville], ['Friendly Fire LLC'])
+        self.assertEqual(DIRECTORY.search_static_companies(city='Belleville', state='MO'), [])
 
 
 if __name__ == '__main__':
