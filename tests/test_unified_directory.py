@@ -108,6 +108,9 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]['company'], "Bailey's Chimney, LLC")
         self.assertEqual(rows[0]['reviewed_professional_names'], ['Matthew Mirabal'])
+        self.assertEqual(rows[0]['reviewed_professionals'][0]['credential'], 'Accredited Certified Chimney Professional')
+        self.assertEqual(rows[0]['reviewed_professionals'][0]['issuer'], 'NCSG')
+        self.assertEqual(rows[0]['reviewed_professionals'][0]['display_status'], 'VERIFIED FROM OFFICIAL SOURCE')
         detail,_=directory.detail_company(rows[0]['id'])
         self.assertEqual([person['holder'] for person in detail['professionals']], ['Matthew Mirabal'])
 

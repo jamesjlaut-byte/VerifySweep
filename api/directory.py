@@ -301,7 +301,7 @@ def service_locations_for(item,fallback_state=''):
         if key not in seen:rows.append({'city':city,'state':fallback_state});seen.add(key)
     return rows
 
-def reviewed_people_for_company(company,city,state,zipcode):
+def reviewed_professionals_for_company(company,city,state,zipcode):
     people=[]
     for person in static_records():
         if clean(person.get('company'),200).lower()!=company.lower():continue
@@ -309,8 +309,19 @@ def reviewed_people_for_company(company,city,state,zipcode):
         same_place=clean(person.get('city'),120).lower()==city.lower() and clean(person.get('state'),40).lower()==state.lower()
         same_state=bool(state) and clean(person.get('state'),40).lower()==state.lower()
         if same_zip or same_place or same_state:
-            people.append(clean(person.get('holder'),200))
-    return sorted(set(value for value in people if value),key=str.lower)
+            label,note=static_status(person)
+            people.append({
+              'id':clean(person.get('id'),160),'holder':clean(person.get('holder'),200),
+              'credential':clean(person.get('credential_type') or person.get('credential'),200),
+              'issuer':clean(person.get('issuer'),100),'source':clean(person.get('source'),1000),
+              'last_checked_at':clean(person.get('last_checked_at'),40),
+              'display_status':label,'status_note':note
+            })
+    unique={person['id'] or '|'.join((person['holder'],person['credential'],person['issuer'])):person for person in people if person['holder']}
+    return sorted(unique.values(),key=lambda person:(person['holder'].lower(),person['credential'].lower()))
+
+def reviewed_people_for_company(company,city,state,zipcode):
+    return sorted(set(person['holder'] for person in reviewed_professionals_for_company(company,city,state,zipcode)),key=str.lower)
 
 def search_static_companies(zipcode='',q='',city='',state='',verified_only=False,radius=25):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower();points=zip_centroids();origin=points.get(zipcode)
@@ -323,7 +334,8 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
     for source in company_sources:
         company=clean(source.get('company'),200);company_city=clean(source.get('city') or source.get('hq_city'),120);company_state=clean(source.get('state') or source.get('hq_state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
         if clean(source.get('id'),160).startswith('national-') and not (source.get('website') or source.get('sources')):continue
-        reviewed_people=reviewed_people_for_company(company,company_city,company_state,company_zip)
+        reviewed_professionals=reviewed_professionals_for_company(company,company_city,company_state,company_zip)
+        reviewed_people=sorted(set(person['holder'] for person in reviewed_professionals),key=str.lower)
         service_locations=service_locations_for(source,company_state);service_areas=[location['city'] for location in service_locations];service_counties=service_counties_for(source);service_area_names=' '.join([*(location['city']+' '+location['state'] for location in service_locations),*service_counties])
         candidate_names=' '.join(clean(p.get('name_or_note'),300) for p in source.get('professional_candidates') or [] if isinstance(p,dict))
         reviewed_names=' '.join(reviewed_people)
@@ -351,7 +363,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'history_note':clean(source.get('history_note'),500),'recognition_source_url':clean(source.get('recognition_source_url'),1000),
           'display_status':company_status_label(source.get('public_status') or 'unverified'),
           'company_claims':source.get('company_claims') or [],'professional_candidates':source.get('professional_candidates') or [],
-          'sources':source.get('sources') or [],'reviewed_professional_names':reviewed_people,
+          'sources':source.get('sources') or [],'reviewed_professional_names':reviewed_people,'reviewed_professionals':reviewed_professionals,
           'verified_professional_count':len(reviewed_people),'verification_scope':clean(source.get('verification_scope'),120),
           'verification_note':clean(source.get('verification_note'),600)
         })
@@ -381,6 +393,8 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         if reviewed_people:
             item['reviewed_professional_names']=sorted(set([*(item.get('reviewed_professional_names') or []),*reviewed_people]),key=str.lower)
             item['verified_professional_count']=len(item['reviewed_professional_names'])
+            combined={person['id'] or '|'.join((person['holder'],person['credential'],person['issuer'])):person for person in [*(item.get('reviewed_professionals') or []),*reviewed_professionals]}
+            item['reviewed_professionals']=sorted(combined.values(),key=lambda person:(person['holder'].lower(),person['credential'].lower()))
         matched=next((location for location in service_locations if location['city'].lower()==city_needle and (not state_needle or location['state'].lower()==state_needle)),None) if city_needle else None
         if matched:item['matched_service_area']=matched['city'];item['matched_service_state']=matched['state']
         exact_company=bool(needle) and needle==company.lower()
@@ -450,7 +464,10 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
             keys=['id','company','website','phone','city','state','zip','public_status','claim_status','last_reviewed_at','verification_due_at']
             rows=[]
             for raw in cur.fetchall():
-                item=rowdict(keys,raw);item['display_status']=company_status_label(item.get('public_status'));rows.append(item)
+                item=rowdict(keys,raw);item['display_status']=company_status_label(item.get('public_status'))
+                item['reviewed_professionals']=reviewed_professionals_for_company(item['company'],clean(item.get('city'),120),clean(item.get('state'),40),clean(item.get('zip'),5))
+                item['reviewed_professional_names']=sorted(set(person['holder'] for person in item['reviewed_professionals']),key=str.lower)
+                item['verified_professional_count']=len(item['reviewed_professional_names']);rows.append(item)
             seen={company_key(item) for item in rows}
             rows.extend(item for item in fallback if company_key(item) not in seen)
             rows.sort(key=lambda item:clean(item.get('company'),200).lower())
