@@ -97,7 +97,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_ncsg_records_are_named_current_source_credentials(self):
         records=directory.static_records()
         ncsg=[row for row in records if row.get('issuer')=='NCSG']
-        self.assertEqual(len(ncsg),12)
+        self.assertGreaterEqual(len(ncsg),20)
         self.assertTrue(all(row['holder'] and row['company'] for row in ncsg))
         self.assertTrue(all(row['credential']=='Accredited Certified Chimney Professional' for row in ncsg))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in ncsg))
