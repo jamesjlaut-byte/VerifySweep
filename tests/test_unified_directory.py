@@ -126,5 +126,11 @@ class UnifiedDirectoryTests(unittest.TestCase):
         credentials=[person['credential'] for person in rows[0]['reviewed_professionals'] if person['holder']=='Paul Robison']
         self.assertEqual(credentials,['Accredited Certified Chimney Journeyman','Master Chimney Professional'])
 
+    def test_company_search_filters_by_issuer_and_exact_credential_type(self):
+        masters=directory.search_static_companies(issuer='NCSG',credential_type='Master Chimney Professional')
+        self.assertTrue({'Top Hat Chimney, LLC','Master Sweep and Repair'}.issubset({row['company'] for row in masters}))
+        self.assertTrue(all(person['issuer']=='NCSG' and person['credential']=='Master Chimney Professional' for row in masters for person in row['reviewed_professionals']))
+        self.assertEqual(directory.search_static_companies(q='Paul Robison',issuer='CSIA'),[])
+
 
 if __name__=='__main__':unittest.main()
