@@ -348,7 +348,9 @@ def miles(a,b):
 def parse_directory_date(value):
     if not value:return None
     if isinstance(value,datetime):return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    try:return datetime.fromisoformat(clean(value,40).replace('Z','+00:00'))
+    try:
+        parsed=datetime.fromisoformat(clean(value,40).replace('Z','+00:00'))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except (TypeError,ValueError):return None
 
 def static_status(item):
@@ -357,11 +359,13 @@ def static_status(item):
     if configured=='disputed':return ('DISPUTED','This credential record requires human review before it can be presented as verified.')
     if configured=='self_reported' or item.get('self_reported'):return ('SELF-REPORTED','This credential was supplied by the professional or company and has not been independently verified.')
     if not item.get('source_available',True):return ('UNABLE TO VERIFY','Official source temporarily unavailable. Credential could not be rechecked at this time.')
-    expires=parse_directory_date(item.get('expiration_date') or item.get('expires_at'))
+    expiration_value=item.get('expiration_date') or item.get('expires_at')
+    expires=parse_directory_date(expiration_value)
+    if expiration_value and expires is None:return ('REVERIFICATION REQUIRED','The recorded expiration date is invalid and requires review at the official source.')
     if expires and expires < datetime.now(timezone.utc):return ('EXPIRED','The recorded credential expiration date has passed. Check the issuer for current status.')
     due=clean(item.get('recheck_due_at'),40)
-    try:is_stale=bool(due) and datetime.fromisoformat(due.replace('Z','+00:00')) < datetime.now(timezone.utc)
-    except ValueError:is_stale=True
+    parsed_due=parse_directory_date(due)
+    is_stale=bool(due) and (parsed_due is None or parsed_due < datetime.now(timezone.utc))
     if is_stale or configured=='reverification_required':return ('REVERIFICATION REQUIRED','The prior verification is stale and should be checked again at the official source.')
     if configured in ('verified','verified_from_official_source') and item.get('verified_at'):
         return ('CREDENTIAL VERIFIED','The individual credential was checked against the linked official source.')

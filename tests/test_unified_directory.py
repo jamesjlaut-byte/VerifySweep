@@ -10,6 +10,18 @@ directory=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(director
 
 
 class UnifiedDirectoryTests(unittest.TestCase):
+    def test_date_only_credential_dates_do_not_crash_status_checks(self):
+        base={'verification_status':'verified_from_official_source','verified_at':'2026-01-01','recheck_due_at':'2099-01-01'}
+        self.assertEqual(directory.static_status({**base,'expiration_date':'2000-01-01'})[0],'EXPIRED')
+        self.assertEqual(directory.static_status({**base,'recheck_due_at':'2000-01-01'})[0],'REVERIFICATION REQUIRED')
+        self.assertEqual(directory.static_status({**base,'expiration_date':'2099-01-01'})[0],'CREDENTIAL VERIFIED')
+        self.assertIsNotNone(directory.parse_directory_date('2026-09-03T10:30:00').tzinfo)
+
+    def test_malformed_expiration_or_review_dates_require_review(self):
+        base={'verification_status':'verified_from_official_source','verified_at':'2026-01-01','recheck_due_at':'2099-01-01'}
+        for field in ('expiration_date','recheck_due_at'):
+            self.assertEqual(directory.static_status({**base,field:'not-a-date'})[0],'REVERIFICATION REQUIRED')
+
     def test_unverified_or_expired_records_do_not_boost_location_rank(self):
         verified={'company':'Verified Sweep','match_rank':5,'distance':40,'reviewed_professionals':[{'holder':'Current Person','display_status':'CREDENTIAL VERIFIED'}]}
         for status in ('EXPIRED','SELF-REPORTED','VERIFICATION NEEDED','REVERIFICATION REQUIRED','UNABLE TO VERIFY','DISPUTED'):
