@@ -193,7 +193,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(rows[0]['reviewed_professional_names'], ['Matthew Mirabal'])
         self.assertEqual(rows[0]['reviewed_professionals'][0]['credential'], 'Accredited Certified Chimney Professional')
         self.assertEqual(rows[0]['reviewed_professionals'][0]['issuer'], 'NCSG')
-        self.assertEqual(rows[0]['reviewed_professionals'][0]['display_status'], 'VERIFIED FROM OFFICIAL SOURCE')
+        self.assertEqual(rows[0]['reviewed_professionals'][0]['display_status'], 'CREDENTIAL VERIFIED')
         detail,_=directory.detail_company(rows[0]['id'])
         self.assertEqual([person['holder'] for person in detail['professionals']], ['Matthew Mirabal'])
 
@@ -216,10 +216,24 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_search_and_profile_pages_link_to_named_professionals(self):
         search=(ROOT/'find-a-pro.html').read_text()
         profile=(ROOT/'professional-profile.html').read_text()
+        company=(ROOT/'company-profile.html').read_text()
         self.assertIn("'View Professional'",search)
         self.assertIn("/professional-profile.html?id=",search)
+        self.assertIn('Only professionals with verified credentials',search)
+        self.assertIn('No professional with an independently verified credential',search)
         self.assertIn("^[A-Za-z0-9_-]{1,80}$",profile)
         self.assertIn("'VERIFY WITH ISSUER'",profile)
+        self.assertIn("'VERIFICATION DETAILS'",profile)
+        self.assertIn("'REPORT A PROBLEM'",profile)
+        self.assertIn('mailto:info@verifysweep.com',profile)
+        self.assertIn("'View Professional'",company)
+        self.assertIn("'REPORT A PROBLEM'",company)
+
+    def test_professional_detail_does_not_infer_identity_or_affiliation(self):
+        detail=directory.detail_static('ncsg-paul-robison-journeyman')
+        self.assertEqual(detail['display_status'],'CREDENTIAL VERIFIED')
+        self.assertEqual(detail['identity_status'],'UNKNOWN')
+        self.assertEqual(detail['company_affiliation_status'],'UNKNOWN')
 
     def test_known_company_alias_attaches_named_credentials_to_service_area_record(self):
         rows=directory.search_static_companies(q='Lee Roff',verified_only=True)

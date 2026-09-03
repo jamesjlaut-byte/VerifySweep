@@ -38,6 +38,7 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   '''CREATE TABLE IF NOT EXISTS directory_professionals (
     id BIGSERIAL PRIMARY KEY, company_id BIGINT REFERENCES directory_companies(id) ON DELETE SET NULL,
     professional_name TEXT NOT NULL, role_title TEXT, public_state TEXT NOT NULL DEFAULT 'pending' CHECK (public_state IN ('pending','active','inactive','removed')),
+    identity_status TEXT NOT NULL DEFAULT 'unknown', company_affiliation_status TEXT NOT NULL DEFAULT 'unknown',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )''',
   '''CREATE TABLE IF NOT EXISTS directory_credentials (
@@ -83,6 +84,8 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ',
   "ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS evidence_status TEXT NOT NULL DEFAULT 'review_needed'",
   'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS content_hash TEXT',
+  "ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS identity_status TEXT NOT NULL DEFAULT 'unknown'",
+  "ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS company_affiliation_status TEXT NOT NULL DEFAULT 'unknown'",
   '''CREATE TABLE IF NOT EXISTS directory_company_claims (
     id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
     claim_text TEXT NOT NULL, classification TEXT NOT NULL DEFAULT 'UNVERIFIED CLAIM',
@@ -194,7 +197,7 @@ def static_status(item):
     except ValueError:is_stale=True
     if is_stale:return ('VERIFICATION UPDATE NEEDED','The prior verification is stale and should be checked again at the official source.')
     if item.get('verification_status')=='verified_from_official_source' and item.get('verified_at'):
-        return ('VERIFIED FROM OFFICIAL SOURCE','The individual credential was checked against the linked official source.')
+        return ('CREDENTIAL VERIFIED','The individual credential was checked against the linked official source.')
     return ('VERIFICATION NEEDED','This record requires an updated official-source verification.')
 
 def search_static(zipcode,q='',radius=25):
@@ -216,6 +219,8 @@ def detail_static(identifier):
     for source in static_records():
         if str(source.get('id'))==str(identifier):
             item=dict(source);item['distance']=None;item['display_status'],item['status_note']=static_status(item)
+            item['identity_status']=clean(item.get('identity_status'),60).upper() or 'UNKNOWN'
+            item['company_affiliation_status']=clean(item.get('company_affiliation_status'),60).upper() or 'UNKNOWN'
             credentials=[]
             for candidate in static_records():
                 same_person=clean(candidate.get('holder'),200).lower()==clean(item.get('holder'),200).lower()
@@ -245,6 +250,8 @@ def ensure(conn):
           "ADD COLUMN IF NOT EXISTS recheck_due_at TIMESTAMPTZ",
           "ADD COLUMN IF NOT EXISTS source_available BOOLEAN NOT NULL DEFAULT TRUE",
           "ADD COLUMN IF NOT EXISTS source_note TEXT",
+          "ADD COLUMN IF NOT EXISTS identity_status TEXT NOT NULL DEFAULT 'unknown'",
+          "ADD COLUMN IF NOT EXISTS company_affiliation_status TEXT NOT NULL DEFAULT 'unknown'",
           "ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION",
           "ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION"
         ]
@@ -266,7 +273,7 @@ def status_for(row):
     if due and due < datetime.now(timezone.utc):
         return ('VERIFICATION UPDATE NEEDED','The prior verification is stale and should be checked again at the official source.')
     if configured=='verified_from_official_source' and row.get('verified_at'):
-        return ('VERIFIED FROM OFFICIAL SOURCE','The individual credential was checked against the linked official source.')
+        return ('CREDENTIAL VERIFIED','The individual credential was checked against the linked official source.')
     if configured=='not_currently_confirmed':
         return ('NOT CURRENTLY CONFIRMED','VerifySweep does not currently have enough official-source evidence to confirm this credential.')
     if configured=='official_source_available':
@@ -514,9 +521,9 @@ def search_db(zipcode,q='',radius=25):
                 where.append('(postal_code=%s OR %s=ANY(service_zips))');params.extend([zipcode,zipcode])
             cur.execute(f'''SELECT id,company,professional_name,credential,COALESCE(credential_type,credential),issuer,
               credential_source,city,state,postal_code,website,phone,verification_status,verified_at,
-              source_last_checked_at,recheck_due_at,source_available,source_note,{distance_sql} AS distance
+              source_last_checked_at,recheck_due_at,source_available,source_note,identity_status,company_affiliation_status,{distance_sql} AS distance
               FROM pro_directory WHERE {' AND '.join(where)} ORDER BY professional_name,company,credential LIMIT 100''',params)
-            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','distance']
+            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance']
             rows=[]
             for raw in cur.fetchall():
                 item=rowdict(keys,raw);label,note=status_for(item);item['display_status']=label;item['status_note']=note
@@ -537,11 +544,13 @@ def detail_db(identifier):
         with conn.cursor() as cur:
             cur.execute('''SELECT id,company,professional_name,credential,COALESCE(credential_type,credential),issuer,
               credential_source,city,state,postal_code,website,phone,verification_status,verified_at,
-              source_last_checked_at,recheck_due_at,source_available,source_note,NULL::double precision
+              source_last_checked_at,recheck_due_at,source_available,source_note,identity_status,company_affiliation_status,NULL::double precision
               FROM pro_directory WHERE id=%s AND status=%s''',(identifier,PUBLISHED_STATUS));raw=cur.fetchone()
             if not raw:return detail_static(identifier)
-            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','distance']
+            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance']
             item=rowdict(keys,raw);item['display_status'],item['status_note']=status_for(item)
+            item['identity_status']=clean(item.get('identity_status'),60).upper() or 'UNKNOWN'
+            item['company_affiliation_status']=clean(item.get('company_affiliation_status'),60).upper() or 'UNKNOWN'
             item['credentials']=[{k:item.get(k) for k in ('id','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note','display_status','status_note')}]
             return item
     finally:conn.close()

@@ -120,7 +120,7 @@ class DirectorySchemaTests(unittest.TestCase):
         rows = DIRECTORY.company_professionals(company)
         self.assertEqual({row['holder'] for row in rows}, {'Bill Reynolds', 'Jason Trevino', 'Jack Wachsmann'})
         self.assertTrue(all(row.get('holder') for row in rows))
-        self.assertTrue(all(row['display_status'] == 'VERIFIED FROM OFFICIAL SOURCE' for row in rows))
+        self.assertTrue(all(row['display_status'] == 'CREDENTIAL VERIFIED' for row in rows))
         self.assertEqual(company['display_status'], 'UNVERIFIED')
 
     def test_hill_country_matches_published_service_areas(self):
@@ -150,7 +150,7 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn('more than 40 years', black_velvet['history_note'])
         professionals = DIRECTORY.company_professionals(black_velvet)
         self.assertEqual([person['holder'] for person in professionals], ['Pete Pohlman'])
-        self.assertEqual(professionals[0]['display_status'], 'VERIFIED FROM OFFICIAL SOURCE')
+        self.assertEqual(professionals[0]['display_status'], 'CREDENTIAL VERIFIED')
         self.assertEqual(black_velvet['display_status'], 'UNVERIFIED')
 
     def test_free_text_location_search_includes_service_areas(self):
