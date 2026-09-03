@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import patch
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -46,7 +47,13 @@ class DirectorySchemaTests(unittest.TestCase):
         for table in (
             'directory_companies',
             'directory_professionals',
+            'directory_credential_types',
             'directory_credentials',
+            'directory_affiliations',
+            'directory_sources',
+            'directory_verification_records',
+            'directory_evidence',
+            'directory_legacy_migration_map',
             'directory_company_sources',
             'directory_claims',
             'directory_verification_events',
@@ -54,6 +61,57 @@ class DirectorySchemaTests(unittest.TestCase):
             'directory_audit_log',
         ):
             self.assertIn(f'CREATE TABLE IF NOT EXISTS {table}', sql)
+
+        self.assertNotIn('DROP TABLE', sql.upper())
+        self.assertNotIn('TRUNCATE', sql.upper())
+
+    def test_phase_one_models_keep_person_company_credential_and_affiliation_separate(self):
+        sql='\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)
+        for field in ('first_name','middle_name','last_name','display_name','profile_photo_url','phone_public','email_public','last_reviewed_at'):
+            self.assertIn(field,sql)
+        for field in ('legal_business_name','business_information_status','claim_status'):
+            self.assertIn(field,sql)
+        for field in ('professional_id','company_id','relationship_type','verification_method','verification_source_url','is_current'):
+            self.assertIn(field,sql)
+        self.assertIn("status IN ('verified','self_reported','pending','unable_to_verify','disputed','former')",sql)
+        self.assertIn('directory_affiliations_identity_idx',sql)
+
+    def test_credential_foundation_supports_types_expiration_and_granular_status(self):
+        sql='\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)
+        self.assertIn('UNIQUE (issuer,name)',sql)
+        self.assertIn('credential_type_id',sql)
+        self.assertIn('credential_number',sql)
+        self.assertIn('issued_date',sql)
+        self.assertIn('expiration_date',sql)
+        for status in ('verified','self_reported','pending_verification','expired','reverification_required','unable_to_verify','disputed','archived'):
+            self.assertIn(status,sql)
+
+    def test_verification_evidence_and_migration_foundations_preserve_provenance(self):
+        sql='\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)
+        for field in ('subject_type','claim_type','claim_value','source_type','source_name','source_url','verified_by','expires_at','review_due_at','public_explanation','internal_notes'):
+            self.assertIn(field,sql)
+        self.assertIn("visibility IN ('private','public')",sql)
+        self.assertIn("migration_status IN ('pending','migrated','ambiguous','skipped','error')",sql)
+        self.assertIn("legacy_table TEXT NOT NULL DEFAULT 'pro_directory'",sql)
+
+    def test_private_directory_fields_are_removed_from_public_projection(self):
+        value={'display_name':'Example Person','notes_internal':'private','email_private':'private@example.test','credentials':[{'credential':'Example','admin_notes':'private'}]}
+        public=DIRECTORY.public_directory_record(value)
+        self.assertEqual(public,{'display_name':'Example Person','credentials':[{'credential':'Example'}]})
+
+    def test_credential_expiration_and_reverification_are_not_permanent_verified_states(self):
+        base={'verification_status':'verified_from_official_source','verified_at':'2026-01-01T00:00:00Z','source_available':True}
+        self.assertEqual(DIRECTORY.static_status({**base,'expiration_date':'2000-01-01T00:00:00Z'})[0],'EXPIRED')
+        self.assertEqual(DIRECTORY.static_status({**base,'recheck_due_at':'2000-01-01T00:00:00Z'})[0],'REVERIFICATION REQUIRED')
+        self.assertEqual(DIRECTORY.static_status({**base,'self_reported':True})[0],'SELF-REPORTED')
+        self.assertEqual(DIRECTORY.static_status({**base,'source_available':False})[0],'UNABLE TO VERIFY')
+
+    def test_admin_authorization_fails_closed(self):
+        with patch.dict(DIRECTORY.os.environ,{},clear=True):
+            self.assertFalse(DIRECTORY.admin_authorized({'Authorization':'Bearer anything'}))
+        with patch.dict(DIRECTORY.os.environ,{'DIRECTORY_ADMIN_TOKEN':'secret'},clear=True):
+            self.assertFalse(DIRECTORY.admin_authorized({'Authorization':'Bearer wrong'}))
+            self.assertTrue(DIRECTORY.admin_authorized({'Authorization':'Bearer secret'}))
 
     def test_status_constraints_keep_claim_and_verification_separate(self):
         sql = '\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)

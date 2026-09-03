@@ -1,4 +1,4 @@
-import json, math, os, re
+import hmac, json, math, os, re
 from functools import lru_cache
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
@@ -13,6 +13,10 @@ NATIONAL_COMPANIES=os.path.join(ROOT,'data','national-directory.json')
 ZIP_CENTROIDS=os.path.join(ROOT,'data','us-zcta-centroids.tsv')
 PUBLISHED_STATUS='verified'
 ALLOWED_RADII={10,25,50,75,100}
+PRIVATE_DIRECTORY_FIELDS={
+  'notes_internal','internal_notes','identity_document','identity_document_url',
+  'email_private','phone_private','private_evidence','reviewer_notes','admin_notes'
+}
 PUBLIC_COMPANY_STATUSES=('unverified','verification_in_progress','verified','information_updated')
 COMPANY_STATUS_LABELS={
   'unverified':'UNVERIFIED',
@@ -41,6 +45,13 @@ NORMALIZED_DIRECTORY_SCHEMA=(
     identity_status TEXT NOT NULL DEFAULT 'unknown', company_affiliation_status TEXT NOT NULL DEFAULT 'unknown',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )''',
+  '''CREATE TABLE IF NOT EXISTS directory_credential_types (
+    id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, issuer TEXT NOT NULL,
+    credential_category TEXT, official_issuer_website TEXT, official_verification_url TEXT,
+    description TEXT, program_status TEXT NOT NULL DEFAULT 'active' CHECK (program_status IN ('active','inactive','unknown')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (issuer,name)
+  )''',
   '''CREATE TABLE IF NOT EXISTS directory_credentials (
     id BIGSERIAL PRIMARY KEY, professional_id BIGINT NOT NULL REFERENCES directory_professionals(id) ON DELETE CASCADE,
     issuer TEXT NOT NULL, credential_type TEXT NOT NULL, credential_number TEXT,
@@ -48,6 +59,52 @@ NORMALIZED_DIRECTORY_SCHEMA=(
     verified_at TIMESTAMPTZ, last_checked_at TIMESTAMPTZ, recheck_due_at TIMESTAMPTZ,
     source_available BOOLEAN NOT NULL DEFAULT TRUE, source_note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_affiliations (
+    id BIGSERIAL PRIMARY KEY, professional_id BIGINT NOT NULL REFERENCES directory_professionals(id) ON DELETE CASCADE,
+    company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
+    role_title TEXT, relationship_type TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('verified','self_reported','pending','unable_to_verify','disputed','former')),
+    verified_at TIMESTAMPTZ, verification_method TEXT, verification_source_url TEXT,
+    start_date DATE, end_date DATE, is_current BOOLEAN,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (professional_id,company_id,relationship_type,start_date)
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_sources (
+    id BIGSERIAL PRIMARY KEY, source_type TEXT NOT NULL CHECK (source_type IN ('official_credential_issuer','official_business_record','professional_submission','company_submission','verifysweep_review','public_website','user_correction','other_authoritative_source')),
+    source_name TEXT, source_url TEXT, authoritative BOOLEAN NOT NULL DEFAULT FALSE,
+    captured_at TIMESTAMPTZ, last_checked_at TIMESTAMPTZ,
+    public_summary TEXT, internal_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_verification_records (
+    id BIGSERIAL PRIMARY KEY,
+    subject_type TEXT NOT NULL CHECK (subject_type IN ('professional_identity','professional_credential','company','company_affiliation','contact_information','service_area')),
+    subject_id TEXT NOT NULL, claim_type TEXT NOT NULL, claim_value TEXT,
+    status TEXT NOT NULL CHECK (status IN ('verified','self_reported','pending_verification','expired','reverification_required','unable_to_verify','disputed','archived')),
+    verification_method TEXT, source_id BIGINT REFERENCES directory_sources(id) ON DELETE SET NULL,
+    source_type TEXT, source_name TEXT, source_url TEXT,
+    verified_at TIMESTAMPTZ, verified_by TEXT, expires_at TIMESTAMPTZ, review_due_at TIMESTAMPTZ,
+    confidence_level TEXT, public_explanation TEXT, internal_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_evidence (
+    id BIGSERIAL PRIMARY KEY,
+    verification_id BIGINT REFERENCES directory_verification_records(id) ON DELETE SET NULL,
+    source_id BIGINT REFERENCES directory_sources(id) ON DELETE SET NULL,
+    case_id TEXT, evidence_type TEXT NOT NULL, source_url TEXT, description TEXT,
+    collected_at TIMESTAMPTZ, review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending','reviewed','rejected','archived')),
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','public')),
+    created_by TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
+  '''CREATE TABLE IF NOT EXISTS directory_legacy_migration_map (
+    id BIGSERIAL PRIMARY KEY, legacy_table TEXT NOT NULL DEFAULT 'pro_directory', legacy_record_id BIGINT NOT NULL,
+    professional_id BIGINT REFERENCES directory_professionals(id) ON DELETE SET NULL,
+    company_id BIGINT REFERENCES directory_companies(id) ON DELETE SET NULL,
+    credential_id BIGINT REFERENCES directory_credentials(id) ON DELETE SET NULL,
+    migration_status TEXT NOT NULL DEFAULT 'pending' CHECK (migration_status IN ('pending','migrated','ambiguous','skipped','error')),
+    migration_note TEXT, migrated_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (legacy_table,legacy_record_id)
   )''',
   '''CREATE TABLE IF NOT EXISTS directory_company_sources (
     id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
@@ -86,6 +143,51 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS content_hash TEXT',
   "ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS identity_status TEXT NOT NULL DEFAULT 'unknown'",
   "ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS company_affiliation_status TEXT NOT NULL DEFAULT 'unknown'",
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS first_name TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS middle_name TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS last_name TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS display_name TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS profile_photo_url TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS city TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS state TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS postal_code TEXT',
+  "ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS service_areas JSONB NOT NULL DEFAULT '[]'::jsonb",
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS phone_public TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS email_public TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS website TEXT',
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS bio TEXT',
+  "ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS profile_status TEXT NOT NULL DEFAULT 'pending'",
+  'ALTER TABLE directory_professionals ADD COLUMN IF NOT EXISTS last_reviewed_at TIMESTAMPTZ',
+  'ALTER TABLE directory_companies ADD COLUMN IF NOT EXISTS legal_business_name TEXT',
+  "ALTER TABLE directory_companies ADD COLUMN IF NOT EXISTS company_status TEXT NOT NULL DEFAULT 'unknown'",
+  "ALTER TABLE directory_companies ADD COLUMN IF NOT EXISTS business_information_status TEXT NOT NULL DEFAULT 'unverified'",
+  "ALTER TABLE directory_companies ADD COLUMN IF NOT EXISTS service_areas JSONB NOT NULL DEFAULT '[]'::jsonb",
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS credential_type_id BIGINT REFERENCES directory_credential_types(id) ON DELETE SET NULL',
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS credential_name TEXT',
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS issued_date DATE',
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS expiration_date DATE',
+  "ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS credential_status TEXT NOT NULL DEFAULT 'pending_verification'",
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS verification_method TEXT',
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS self_reported BOOLEAN NOT NULL DEFAULT FALSE',
+  'ALTER TABLE directory_credentials ADD COLUMN IF NOT EXISTS notes_internal TEXT',
+  '''DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='directory_professionals_identity_status_check') THEN
+      ALTER TABLE directory_professionals ADD CONSTRAINT directory_professionals_identity_status_check
+      CHECK (identity_status IN ('verified','self_reported','pending','unable_to_verify','disputed','unknown')) NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='directory_professionals_affiliation_status_check') THEN
+      ALTER TABLE directory_professionals ADD CONSTRAINT directory_professionals_affiliation_status_check
+      CHECK (company_affiliation_status IN ('verified','self_reported','pending','unable_to_verify','disputed','former','unknown')) NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='directory_credentials_credential_status_check') THEN
+      ALTER TABLE directory_credentials ADD CONSTRAINT directory_credentials_credential_status_check
+      CHECK (credential_status IN ('verified','self_reported','pending_verification','expired','reverification_required','unable_to_verify','disputed','archived')) NOT VALID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='directory_companies_company_status_check') THEN
+      ALTER TABLE directory_companies ADD CONSTRAINT directory_companies_company_status_check
+      CHECK (company_status IN ('active','inactive','closed','unknown')) NOT VALID;
+    END IF;
+  END $$''',
   '''CREATE TABLE IF NOT EXISTS directory_company_claims (
     id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
     claim_text TEXT NOT NULL, classification TEXT NOT NULL DEFAULT 'UNVERIFIED CLAIM',
@@ -116,6 +218,14 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   'CREATE INDEX IF NOT EXISTS directory_companies_public_status_idx ON directory_companies (public_status)',
   'CREATE INDEX IF NOT EXISTS directory_professionals_company_idx ON directory_professionals (company_id)',
   'CREATE INDEX IF NOT EXISTS directory_credentials_professional_idx ON directory_credentials (professional_id)',
+  'CREATE INDEX IF NOT EXISTS directory_credentials_type_idx ON directory_credentials (credential_type_id)',
+  'CREATE INDEX IF NOT EXISTS directory_affiliations_professional_idx ON directory_affiliations (professional_id,status)',
+  'CREATE INDEX IF NOT EXISTS directory_affiliations_company_idx ON directory_affiliations (company_id,status)',
+  "CREATE UNIQUE INDEX IF NOT EXISTS directory_affiliations_identity_idx ON directory_affiliations (professional_id,company_id,COALESCE(relationship_type,''),COALESCE(start_date,DATE '0001-01-01'))",
+  'CREATE INDEX IF NOT EXISTS directory_verification_subject_idx ON directory_verification_records (subject_type,subject_id,status)',
+  'CREATE INDEX IF NOT EXISTS directory_verification_review_due_idx ON directory_verification_records (review_due_at,status)',
+  'CREATE INDEX IF NOT EXISTS directory_evidence_verification_idx ON directory_evidence (verification_id,visibility)',
+  'CREATE INDEX IF NOT EXISTS directory_migration_status_idx ON directory_legacy_migration_map (migration_status,legacy_record_id)',
   'CREATE INDEX IF NOT EXISTS directory_sources_company_idx ON directory_company_sources (company_id)',
   'CREATE INDEX IF NOT EXISTS directory_claims_queue_idx ON directory_claims (review_status,created_at)',
   'CREATE INDEX IF NOT EXISTS directory_verification_queue_idx ON directory_verification_events (created_at)',
@@ -125,6 +235,20 @@ NORMALIZED_DIRECTORY_SCHEMA=(
 
 def clean(v,n=500): return re.sub(r'\s+',' ',str(v or '')).strip()[:n]
 def valid_zip(z): return bool(re.fullmatch(r'\d{5}',z or ''))
+def admin_authorized(headers):
+    expected=os.environ.get('DIRECTORY_ADMIN_TOKEN','')
+    supplied=clean(headers.get('Authorization') if headers else '',2000)
+    return bool(expected) and supplied.startswith('Bearer ') and hmac.compare_digest(supplied[7:],expected)
+
+def public_directory_record(value):
+    """Recursively remove server-only directory fields before a public response."""
+    if isinstance(value,list):return [public_directory_record(item) for item in value]
+    if not isinstance(value,dict):return value
+    return {
+      key:public_directory_record(item) for key,item in value.items()
+      if key not in PRIVATE_DIRECTORY_FIELDS and not key.endswith('_private')
+    }
+
 def valid_http_url(v):
     try:return urlparse(v).scheme in ('http','https') and bool(urlparse(v).hostname)
     except:return False
@@ -190,14 +314,27 @@ def miles(a,b):
     arc=2*math.asin(math.sqrt(math.sin(dlat/2)**2+math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2))
     return 3958.7613*arc
 
+def parse_directory_date(value):
+    if not value:return None
+    if isinstance(value,datetime):return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:return datetime.fromisoformat(clean(value,40).replace('Z','+00:00'))
+    except (TypeError,ValueError):return None
+
 def static_status(item):
-    if not item.get('source_available',True):return ('OFFICIAL SOURCE AVAILABLE','Official source temporarily unavailable. Credential could not be rechecked at this time.')
+    configured=clean(item.get('credential_status') or item.get('verification_status'),60).lower()
+    if configured=='archived':return ('ARCHIVED','This credential record is retained for history and is not presented as current.')
+    if configured=='disputed':return ('DISPUTED','This credential record requires human review before it can be presented as verified.')
+    if configured=='self_reported' or item.get('self_reported'):return ('SELF-REPORTED','This credential was supplied by the professional or company and has not been independently verified.')
+    if not item.get('source_available',True):return ('UNABLE TO VERIFY','Official source temporarily unavailable. Credential could not be rechecked at this time.')
+    expires=parse_directory_date(item.get('expiration_date') or item.get('expires_at'))
+    if expires and expires < datetime.now(timezone.utc):return ('EXPIRED','The recorded credential expiration date has passed. Check the issuer for current status.')
     due=clean(item.get('recheck_due_at'),40)
     try:is_stale=bool(due) and datetime.fromisoformat(due.replace('Z','+00:00')) < datetime.now(timezone.utc)
     except ValueError:is_stale=True
-    if is_stale:return ('VERIFICATION UPDATE NEEDED','The prior verification is stale and should be checked again at the official source.')
-    if item.get('verification_status')=='verified_from_official_source' and item.get('verified_at'):
+    if is_stale or configured=='reverification_required':return ('REVERIFICATION REQUIRED','The prior verification is stale and should be checked again at the official source.')
+    if configured in ('verified','verified_from_official_source') and item.get('verified_at'):
         return ('CREDENTIAL VERIFIED','The individual credential was checked against the linked official source.')
+    if configured=='unable_to_verify':return ('UNABLE TO VERIFY','VerifySweep could not confirm this credential from the available authoritative source.')
     return ('VERIFICATION NEEDED','This record requires an updated official-source verification.')
 
 def search_static(zipcode,q='',radius=25):
@@ -211,7 +348,7 @@ def search_static(zipcode,q='',radius=25):
             if distance>radius:continue
         elif zipcode and zipcode!=clean(item.get('zip'),5) and zipcode not in (item.get('service_zips') or []):continue
         item['distance']=round(distance,1) if distance is not None else None
-        item['display_status'],item['status_note']=static_status(item);rows.append(item)
+        item['display_status'],item['status_note']=static_status(item);rows.append(public_directory_record(item))
     rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
     return rows,bool(origin)
 
@@ -230,7 +367,7 @@ def detail_static(identifier):
                 credential={k:candidate.get(k) for k in ('id','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note')}
                 credential['display_status'],credential['status_note']=static_status(candidate);credentials.append(credential)
             item['credentials']=sorted(credentials,key=lambda value:(clean(value.get('issuer'),100),clean(value.get('credential_type') or value.get('credential'),200)))
-            return item
+            return public_directory_record(item)
     return None
 
 def ensure(conn):
@@ -267,18 +404,11 @@ def ensure(conn):
 
 def status_for(row):
     configured=clean(row.get('verification_status'),60).lower()
-    if not row.get('source_available',True):
-        return ('OFFICIAL SOURCE AVAILABLE','Official source temporarily unavailable. Credential could not be rechecked at this time.')
-    due=row.get('recheck_due_at')
-    if due and due < datetime.now(timezone.utc):
-        return ('VERIFICATION UPDATE NEEDED','The prior verification is stale and should be checked again at the official source.')
-    if configured=='verified_from_official_source' and row.get('verified_at'):
-        return ('CREDENTIAL VERIFIED','The individual credential was checked against the linked official source.')
     if configured=='not_currently_confirmed':
         return ('NOT CURRENTLY CONFIRMED','VerifySweep does not currently have enough official-source evidence to confirm this credential.')
     if configured=='official_source_available':
         return ('OFFICIAL SOURCE AVAILABLE','Use the linked official source to check the individual credential.')
-    return ('VERIFICATION NEEDED','This record requires an updated official-source verification.')
+    return static_status(row)
 
 def rowdict(keys,row):return dict(zip(keys,row))
 
@@ -573,7 +703,7 @@ def submit_db(p):
 
 class handler(BaseHTTPRequestHandler):
     def sendj(self,code,p):
-        b=json.dumps(p,default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+        b=json.dumps(public_directory_record(p),default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
     def do_OPTIONS(self):self.send_response(204);self.send_header('Allow','GET, POST, OPTIONS');self.end_headers()
     def do_GET(self):
         try:
