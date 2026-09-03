@@ -206,6 +206,21 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(moy['public_status'], 'unverified')
         self.assertEqual(moy['display_status'], 'UNVERIFIED')
 
+    def test_new_major_market_records_are_searchable_and_unverified(self):
+        markets = [
+            ('New York', 'NY', 'Chimney Experts LLC'),
+            ('Philadelphia', 'PA', 'Chimney Cricket, Inc.'),
+            ('Indianapolis', 'IN', 'Clean Sweep 317'),
+            ('Nashville', 'TN', 'TN Chimney Sweep Inspection & Repair of Nashville LLC'),
+        ]
+        for city, state, company in markets:
+            rows = DIRECTORY.search_static_companies(city=city, state=state)
+            record = next(row for row in rows if row['company'] == company)
+            self.assertEqual(record['matched_service_area'], city)
+            self.assertEqual(record['matched_service_state'], state)
+            self.assertEqual(record['public_status'], 'unverified')
+            self.assertEqual(record['display_status'], 'UNVERIFIED')
+
     def test_harkys_florida_locations_do_not_cross_match_texas(self):
         tampa = DIRECTORY.search_static_companies(city='Tampa', state='FL')
         self.assertIn("Harky's Chimney & Home Services",[row['company'] for row in tampa])

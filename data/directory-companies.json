@@ -394,6 +394,62 @@
       "service_area_source_url": "https://www.moyconstruction.com/fireplace-chimney/",
       "captured_at": "2026-09-02T20:00:00Z",
       "source_note": "The company website publishes chimney inspections and sweeps, this public business phone number, and service throughout El Paso. No individual credential or company certification is inferred."
+    },
+    {
+      "company": "Chimney Experts LLC",
+      "website": "https://chimneyexperts.nyc/",
+      "phone": "(646) 777-8909",
+      "city": "New York",
+      "state": "NY",
+      "postal_code": "11201",
+      "service_areas": ["New York", "Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"],
+      "source_type": "official_business_website",
+      "source_url": "https://chimneyexperts.nyc/",
+      "service_area_source_url": "https://chimneyexperts.nyc/areas-we-serve/",
+      "captured_at": "2026-09-02T21:00:00Z",
+      "source_note": "The company website publishes chimney services, this public business phone number, and coverage across New York City's five boroughs. No individual credential is inferred."
+    },
+    {
+      "company": "Chimney Cricket, Inc.",
+      "website": "https://chimneycricket.net/",
+      "phone": "(610) 557-1638",
+      "city": "Media",
+      "state": "PA",
+      "postal_code": "19063",
+      "service_areas": ["Philadelphia", "Media", "West Chester", "Wayne", "Havertown", "Broomall", "Ardmore", "Bryn Mawr", "Villanova"],
+      "source_type": "official_business_website",
+      "source_url": "https://chimneycricket.net/",
+      "service_area_source_url": "https://chimneycricket.net/about-us/service-area/",
+      "captured_at": "2026-09-02T21:00:00Z",
+      "source_note": "The company website publishes chimney services, this public business phone number, and the included Philadelphia-area communities. No individual credential is inferred."
+    },
+    {
+      "company": "Clean Sweep 317",
+      "website": "https://www.cleansweep317.com/",
+      "phone": "(317) 643-1128",
+      "city": "Indianapolis",
+      "state": "IN",
+      "postal_code": "46220",
+      "service_areas": ["Indianapolis", "Carmel", "Fishers", "Lawrence", "Noblesville", "Zionsville", "Westfield", "Greenwood", "Brownsburg"],
+      "source_type": "official_business_website",
+      "source_url": "https://www.cleansweep317.com/",
+      "service_area_source_url": "https://www.cleansweep317.com/",
+      "captured_at": "2026-09-02T21:00:00Z",
+      "source_note": "The company website publishes chimney services, this public business phone number, and the included Indianapolis-area communities. No individual credential is inferred."
+    },
+    {
+      "company": "TN Chimney Sweep Inspection & Repair of Nashville LLC",
+      "website": "https://tnchimneysweep.com/",
+      "phone": "(615) 803-8888",
+      "city": "Nashville",
+      "state": "TN",
+      "postal_code": "",
+      "service_areas": ["Nashville", "Franklin", "Brentwood", "Belle Meade", "Smyrna", "Spring Hill", "Fairview", "Thompson's Station", "Nolensville", "Oak Hill", "Berry Hill", "Forest Hills", "Columbia", "College Grove", "Chapel Hill", "Mount Juliet", "Hendersonville", "Hermitage"],
+      "source_type": "official_business_website",
+      "source_url": "https://tnchimneysweep.com/",
+      "service_area_source_url": "https://tnchimneysweep.com/tn-chimney%E2%80%99s-service-area",
+      "captured_at": "2026-09-02T21:00:00Z",
+      "source_note": "The company website publishes chimney services, this public business phone number, and the included Middle Tennessee service communities. No individual credential is inferred."
     }
   ]
 }
