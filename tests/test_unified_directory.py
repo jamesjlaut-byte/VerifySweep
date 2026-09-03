@@ -10,6 +10,11 @@ directory=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(director
 
 
 class UnifiedDirectoryTests(unittest.TestCase):
+    def test_directory_uses_current_nfi_public_search_entry(self):
+        page=(ROOT/'find-a-pro.html').read_text()
+        self.assertIn('https://www.nficertified.org/public/',page)
+        self.assertNotIn('https://www.nficertified.org/public/find-an-nfi-pro/',page)
+
     def test_national_seed_is_canonical_and_neutral(self):
         data=json.loads((ROOT/'data'/'national-directory.json').read_text())
         self.assertEqual(data['source_record_count'],356)
