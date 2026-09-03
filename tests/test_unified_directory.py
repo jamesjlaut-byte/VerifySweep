@@ -117,7 +117,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),57)
+        self.assertGreaterEqual(len(csia),67)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
@@ -165,6 +165,15 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(set(abbey['reviewed_professional_names']),{'Kevin Daniel','Ken Hoelscher','Dylan Dunivan'})
         pro_sweep=next(row for row in ohio if row['company']=='Pro Sweep Chimney Service')
         self.assertEqual(set(pro_sweep['reviewed_professional_names']),{'Dennis Jacob','Cody Carter'})
+
+    def test_illinois_csia_professionals_are_named_and_state_scoped(self):
+        illinois=directory.search_static_companies(state='IL',issuer='CSIA',verified_only=True)
+        names={name for row in illinois for name in row['reviewed_professional_names']}
+        self.assertTrue({'Aeden Roger','Mike Strickland','Bill Fox','David Palm','James Duda','Daniel Colon','Danny Edmonds','Pankaj Patel','Ken Kopka','Todd Dosemagen'}.issubset(names))
+        vertical=next(row for row in illinois if row['company']=='Vertical Chimney Care')
+        self.assertEqual(set(vertical['reviewed_professional_names']),{'James Duda','Danny Edmonds'})
+        doctor=directory.search_static_companies(q='Todd Dosemagen',state='IL',issuer='CSIA',verified_only=True)
+        self.assertEqual([(row['company'],row['state']) for row in doctor],[('The Chimney Doctor','IL')])
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
