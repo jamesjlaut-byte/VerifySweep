@@ -117,13 +117,21 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),9)
+        self.assertGreaterEqual(len(csia),21)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
         self.assertTrue(all(row['source'].startswith('https://web.csia.org/CSIA-Certified/') for row in csia))
         self.assertTrue(all('/Texas' not in row['source'] for row in csia))
         self.assertTrue({'Layton Mitten','Sahar Mazoz','Lee Roff','Jack Wachsmann','Santiago Ramirez Jr.'}.issubset({row['holder'] for row in csia}))
+
+    def test_csia_expansion_covers_named_california_and_florida_professionals(self):
+        california=directory.search_static_companies(state='CA',issuer='CSIA',verified_only=True)
+        florida=directory.search_static_companies(state='FL',issuer='CSIA',verified_only=True)
+        ca_names={name for row in california for name in row['reviewed_professional_names']}
+        fl_names={name for row in florida for name in row['reviewed_professional_names']}
+        self.assertTrue({'Kyle Pocock','Tyler Kezas','Richard Pocock','Robert Ornelas','Michaele Dempsey'}.issubset(ca_names))
+        self.assertTrue({'James Simmons','Joshua Brosius','Michael Wood','Jenea Clarke','Michael Rayner','David Wayne Godwin','Robert Lavallee'}.issubset(fl_names))
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
