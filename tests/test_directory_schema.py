@@ -154,6 +154,25 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn("'ready_for_verification'",source)
         self.assertIn('reviewed_at TIMESTAMPTZ',source)
 
+    def test_credential_publication_requires_separate_official_source_confirmation(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn("clean(p.get('action'),40)=='verify_credential_submission'",source)
+        self.assertIn("p.get('confirmed_current') is not True",source)
+        self.assertIn("old_status!='ready_for_verification'",source)
+        self.assertIn('An expired credential cannot be marked verified.',source)
+        self.assertIn("status='verified',verification_status='verified_from_official_source'",source)
+        self.assertIn("now()+interval '90 days'",source)
+        self.assertIn("'verify_credential_submission'",source)
+        self.assertIn("'source_last_checked_at':'server_timestamp'",source)
+        self.assertIn('official_issuer_source(issuer,source)',source)
+
+    def test_official_issuer_sources_reject_unrelated_and_lookalike_domains(self):
+        self.assertTrue(DIRECTORY.official_issuer_source('NFI','https://www.nficertified.org/public/find-an-nfi-pro/'))
+        self.assertTrue(DIRECTORY.official_issuer_source('CSIA','https://web.csia.org/CSIA-Certified'))
+        self.assertFalse(DIRECTORY.official_issuer_source('NFI','https://example.com/nfi'))
+        self.assertFalse(DIRECTORY.official_issuer_source('NFI','https://nficertified.org.example.com/profile'))
+        self.assertFalse(DIRECTORY.official_issuer_source('Other','https://example.com/profile'))
+
     def test_reverification_queue_is_private_and_covers_expiration_source_and_due_dates(self):
         source=(ROOT/'api'/'directory.py').read_text()
         self.assertIn("view=='admin_reverification'",source)

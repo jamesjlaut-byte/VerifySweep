@@ -28,6 +28,7 @@ OFFICIAL_SOURCES={
   'csia':'https://web.csia.org/CSIA-Certified',
   'nfi':'https://www.nficertified.org/public/'
 }
+OFFICIAL_ISSUER_DOMAINS={'CSIA':('csia.org',),'NFI':('nficertified.org',),'F.I.R.E.':('f-i-r-e-service.com',),'FIRE':('f-i-r-e-service.com',),'NCSG':('ncsg.org',),'NCSG / CCP':('ncsg.org',)}
 ZIP_LOOKUP_BASE='https://api.zippopotam.us/us/'
 NORMALIZED_DIRECTORY_SCHEMA=(
   '''CREATE TABLE IF NOT EXISTS directory_companies (
@@ -273,6 +274,14 @@ def public_directory_record(value):
 
 def valid_http_url(v):
     try:return urlparse(v).scheme in ('http','https') and bool(urlparse(v).hostname)
+    except:return False
+
+def official_issuer_source(issuer,value):
+    domains=OFFICIAL_ISSUER_DOMAINS.get(clean(issuer,100))
+    if not domains:return False
+    try:
+        host=(urlparse(value).hostname or '').lower().rstrip('.')
+        return any(host==domain or host.endswith('.'+domain) for domain in domains)
     except:return False
 
 @lru_cache(maxsize=512)
@@ -946,6 +955,28 @@ def review_credential_submission_db(submission_id,status,reviewer,note):
         conn.commit();return {'id':submission_id,'status':status,'verification_status':'verification_needed'}
     finally:conn.close()
 
+def verify_credential_submission_db(submission_id,reviewer,note):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('SELECT status,credential_source,expiration_date,verification_status,issuer FROM pro_directory WHERE id=%s FOR UPDATE',(submission_id,));row=cur.fetchone()
+            if not row:raise ValueError('Credential submission not found.')
+            old_status,source,expiration_date,old_verification_status,issuer=row
+            if old_status!='ready_for_verification':raise ValueError('Credential submission must complete evidence review before verification.')
+            if not valid_http_url(clean(source,1000)):raise ValueError('A valid official verification source is required.')
+            if not official_issuer_source(issuer,source):raise ValueError('The verification URL must belong to the stated credential issuer.')
+            if expiration_date and expiration_date<datetime.now(timezone.utc).date():raise ValueError('An expired credential cannot be marked verified.')
+            source_note='Credential confirmed by an authorized VerifySweep reviewer using the recorded official issuer source.'
+            cur.execute('''UPDATE pro_directory SET status='verified',verification_status='verified_from_official_source',verified_at=now(),
+              source_last_checked_at=now(),recheck_due_at=CASE WHEN expiration_date IS NOT NULL THEN LEAST(expiration_date::timestamptz,now()+interval '90 days') ELSE now()+interval '90 days' END,
+              source_available=TRUE,source_note=%s,reviewed_by=%s,review_note=%s,reviewed_at=now(),updated_at=now() WHERE id=%s''',(source_note,reviewer,note,submission_id))
+            cur.execute('''INSERT INTO directory_audit_log(actor_id,action,target_type,target_id,old_value,new_value,reason)
+              VALUES(%s,'verify_credential_submission','credential_submission',%s,%s::jsonb,%s::jsonb,%s)''',(reviewer,str(submission_id),json.dumps({'status':old_status,'verification_status':old_verification_status}),json.dumps({'status':'verified','verification_status':'verified_from_official_source','source_last_checked_at':'server_timestamp','recheck_due_days':90}),note))
+        conn.commit();return {'id':submission_id,'status':'verified','verification_status':'verified_from_official_source','review_due_days':90}
+    finally:conn.close()
+
 def review_report_db(report_id,status,reviewer,note):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
@@ -1056,6 +1087,14 @@ class handler(BaseHTTPRequestHandler):
                 if status not in ('reviewing','needs_evidence','ready_for_verification','rejected','withdrawn'):raise ValueError('Choose a valid submission review status.')
                 if len(note)<5:raise ValueError('Add a review note for the audit trail.')
                 return self.sendj(200,review_credential_submission_db(submission_id,status,reviewer,note))
+            if clean(p.get('action'),40)=='verify_credential_submission':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                try:submission_id=int(p.get('submission_id'))
+                except (TypeError,ValueError):raise ValueError('Choose a valid credential submission.')
+                if p.get('confirmed_current') is not True:raise ValueError('Confirm that the official issuer source shows the credential as current.')
+                note=clean(p.get('review_note'),1000);reviewer=clean(self.headers.get('X-VerifySweep-Reviewer'),120) or 'authorized-reviewer'
+                if len(note)<10:raise ValueError('Document the official-source verification in the audit note.')
+                return self.sendj(200,verify_credential_submission_db(submission_id,reviewer,note))
             if clean(p.get('action'),40)=='review_report':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 try:report_id=int(p.get('report_id'))
