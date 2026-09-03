@@ -98,7 +98,9 @@ class DirectorySchemaTests(unittest.TestCase):
             'Hill Country Air Duct And Chimney Sweeps LLC',
             'Wolfman Chimney & Fireplace',
         }.issubset({row['company'] for row in new_braunfels}))
-        self.assertEqual(len(DIRECTORY.search_static_companies(zipcode='78070')), 1)
+        spring_branch = DIRECTORY.search_static_companies(zipcode='78070')
+        self.assertTrue(any(row['company'].startswith('Hill Country') for row in spring_branch))
+        self.assertTrue(all(row.get('distance') is None or row['distance'] <= 25 for row in spring_branch))
         self.assertEqual(DIRECTORY.search_static_companies(zipcode='00000'), [])
 
     def test_independent_company_records_make_austin_searchable(self):
@@ -130,6 +132,16 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(hill_country['display_status'], 'UNVERIFIED')
         self.assertEqual(hill_country['public_status'], 'unverified')
         self.assertFalse(hill_country.get('verification_scope'))
+
+    def test_company_zip_search_honors_radius_and_reports_distance(self):
+        ten_miles = DIRECTORY.search_static_companies(zipcode='78701', radius=10)
+        fifty_miles = DIRECTORY.search_static_companies(zipcode='78701', radius=50)
+        self.assertLess(len(ten_miles), len(fifty_miles))
+        self.assertNotIn('Wolfman Chimney & Fireplace', {row['company'] for row in ten_miles})
+        wolfman = next(row for row in fifty_miles if row['company'] == 'Wolfman Chimney & Fireplace')
+        self.assertLessEqual(wolfman['distance'], 50)
+        distances = [row['distance'] for row in fifty_miles if row.get('distance') is not None]
+        self.assertEqual(distances, sorted(distances))
 
     def test_black_velvet_service_area_and_named_credential_stay_separate(self):
         rows = DIRECTORY.search_static_companies(city='Fort Worth', state='TX')

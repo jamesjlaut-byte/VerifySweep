@@ -311,8 +311,8 @@ def reviewed_people_for_company(company,city,state,zipcode):
             people.append(clean(person.get('holder'),200))
     return sorted(set(value for value in people if value),key=str.lower)
 
-def search_static_companies(zipcode='',q='',city='',state='',verified_only=False):
-    groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
+def search_static_companies(zipcode='',q='',city='',state='',verified_only=False,radius=25):
+    groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower();points=zip_centroids();origin=points.get(zipcode)
     company_sources=[*static_company_records(),*national_company_records()]
     known={(clean(x.get('company'),200).lower(),clean(x.get('zip') or x.get('postal_code'),5),clean(x.get('city') or x.get('hq_city'),120).lower(),clean(x.get('state') or x.get('hq_state'),40).lower()) for x in company_sources}
     for person in static_records():
@@ -328,7 +328,9 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names,candidate_names,reviewed_names)).lower()
         if needle_tokens and not all(token in searchable for token in needle_tokens):continue
         if verified_only and not reviewed_people:continue
-        if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
+        distance=miles(origin,points[company_zip]) if origin and points.get(company_zip) else None
+        direct_zip_match=bool(zipcode) and (zipcode==company_zip or zipcode in (source.get('service_zips') or []))
+        if zipcode and not direct_zip_match and (distance is None or distance>radius):continue
         location_matches_city=[location for location in service_locations if location['city'].lower()==city_needle]
         if city_needle and city_needle!=company_city.lower() and not location_matches_city:continue
         if state_needle:
@@ -351,6 +353,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'verified_professional_count':len(reviewed_people),'verification_scope':clean(source.get('verification_scope'),120),
           'verification_note':clean(source.get('verification_note'),600)
         })
+        if distance is not None and (item.get('distance') is None or distance<item['distance']):item['distance']=round(distance,1)
         checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
         if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
         if not item['website'] and source.get('website'):item['website']=clean(source.get('website'),1000)
@@ -392,7 +395,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         if item.get('match_rank') is None or rank<item['match_rank']:
             item['match_rank']=rank;item['match_reason']=reason
     # Verification status is descriptive, never an affiliated or founder-based ranking signal.
-    return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item['company'].lower()))
+    return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item.get('distance') if item.get('distance') is not None else float('inf'),item['company'].lower()))
 
 def company_professionals(company):
     rows=[]
@@ -412,8 +415,8 @@ def detail_company(identifier):
     company=dict(company);company['professionals']=company_professionals(company)
     return company,connected
 
-def search_companies_db(zipcode='',q='',city='',state='',verified_only=False):
-    fallback=search_static_companies(zipcode,q,city,state,verified_only)
+def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,radius=25):
+    fallback=search_static_companies(zipcode,q,city,state,verified_only,radius)
     conn=dbconn()
     if not conn:return fallback,False
     try:
@@ -440,8 +443,7 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False):
             cur.execute(f'''SELECT c.id,c.canonical_name,c.website,c.phone,c.city,c.state,c.postal_code,
               c.public_status,c.claim_status,c.last_reviewed_at,c.verification_due_at
               FROM directory_companies c WHERE {' AND '.join(where)}
-              ORDER BY CASE c.public_status WHEN 'verified' THEN 0 WHEN 'verification_in_progress' THEN 1 ELSE 2 END,
-              c.canonical_name LIMIT 100''',params)
+              ORDER BY c.canonical_name LIMIT 100''',params)
             keys=['id','company','website','phone','city','state','zip','public_status','claim_status','last_reviewed_at','verification_due_at']
             rows=[]
             for raw in cur.fetchall():
@@ -536,18 +538,21 @@ class handler(BaseHTTPRequestHandler):
                     result,connected=detail_company(identifier)
                     return self.sendj(200 if result else 404,{'result':result,'database_connected':connected,'public_business_fields_only':True} if result else {'error':'Company record not found.'})
                 z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40);verified_only=clean((qs.get('verified') or [''])[0],5) in ('1','true','yes')
+                try:radius=int((qs.get('radius') or ['25'])[0])
+                except:radius=25
                 if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
+                if radius not in ALLOWED_RADII:return self.sendj(400,{'error':'Choose a supported search radius.'})
                 if not any((z,q,city,state,verified_only)):return self.sendj(400,{'error':'Search by ZIP, city, state, business name, professional name, or reviewed credential record.'})
-                results,connected=search_companies_db(z,q,city,state,verified_only)
+                results,connected=search_companies_db(z,q,city,state,verified_only,radius)
                 resolved=resolve_us_zip(z) if z and not (city or state) else None
                 if resolved:
-                    nearby,nearby_connected=search_companies_db('',q,resolved['city'],resolved['state'],verified_only)
+                    nearby,nearby_connected=search_companies_db('',q,resolved['city'],resolved['state'],verified_only,radius)
                     existing={company_key(item) for item in results}
                     results.extend(item for item in nearby if company_key(item) not in existing)
-                    results.sort(key=lambda item:(0 if item.get('matched_service_area') else 1,clean(item.get('company'),200).lower()))
+                    results.sort(key=lambda item:(0 if item.get('matched_service_area') else 1,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower()))
                     connected=connected or nearby_connected
                 return self.sendj(200,{'results':results,'count':len(results),'database_connected':connected,'public_business_fields_only':True,
-                  'resolved_location':resolved,
+                  'resolved_location':resolved,'radius':radius,'distance_search_available':bool(z and zip_centroids().get(z)),
                   'coverage_notice':'Directory coverage varies by location and is not comprehensive. Missing results do not establish that no qualified professional serves an area.',
                   'note':'UNVERIFIED means VerifySweep has not completed verification. It does not indicate fraud, misconduct, incompetence, or wrongdoing.'})
             if view!='professionals':return self.sendj(400,{'error':'Choose a supported directory view.'})
