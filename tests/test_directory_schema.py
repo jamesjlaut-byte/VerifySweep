@@ -133,6 +133,16 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn('directory_target_exists',source)
         self.assertIn('Claiming a profile does not verify identity, affiliation, credentials, or the company.',source)
 
+    def test_pending_credential_submissions_preserve_review_fields_privately(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn('credential_number TEXT',source)
+        self.assertIn('expiration_date DATE',source)
+        self.assertIn('submitter_email_private TEXT',source)
+        self.assertIn('submission_notes_private TEXT',source)
+        self.assertIn("view=='admin_submissions'",source)
+        self.assertIn("WHERE status='pending'",source)
+        self.assertIn('Administrative authorization required.',source)
+
     def test_reverification_queue_is_private_and_covers_expiration_source_and_due_dates(self):
         source=(ROOT/'api'/'directory.py').read_text()
         self.assertIn("view=='admin_reverification'",source)

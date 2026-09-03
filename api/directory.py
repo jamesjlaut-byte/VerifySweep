@@ -402,6 +402,10 @@ def ensure(conn):
         )''')
         migrations=[
           "ADD COLUMN IF NOT EXISTS credential_type TEXT",
+          "ADD COLUMN IF NOT EXISTS credential_number TEXT",
+          "ADD COLUMN IF NOT EXISTS expiration_date DATE",
+          "ADD COLUMN IF NOT EXISTS submitter_email_private TEXT",
+          "ADD COLUMN IF NOT EXISTS submission_notes_private TEXT",
           "ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'verification_needed'",
           "ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ",
           "ADD COLUMN IF NOT EXISTS source_last_checked_at TIMESTAMPTZ",
@@ -796,14 +800,27 @@ def submit_db(p):
     try:
         ensure(conn);service=[clean(x,5) for x in (p.get('service_zips') or []) if valid_zip(clean(x,5))][:100]
         with conn.cursor() as cur:
-            cur.execute('''INSERT INTO pro_directory(company,professional_name,credential,credential_type,issuer,credential_source,
-              city,state,postal_code,service_zips,website,phone,status,verification_status,source_available)
-              VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending','verification_needed',TRUE) RETURNING id''',(
+            cur.execute('''INSERT INTO pro_directory(company,professional_name,credential,credential_type,credential_number,expiration_date,issuer,credential_source,
+              city,state,postal_code,service_zips,website,phone,submitter_email_private,submission_notes_private,status,verification_status,source_available)
+              VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending','verification_needed',TRUE) RETURNING id''',(
               clean(p.get('company'),200),clean(p.get('professional_name'),200),clean(p.get('credential'),200),clean(p.get('credential_type') or p.get('credential'),200),
-              clean(p.get('issuer'),100),clean(p.get('credential_source'),1000),clean(p.get('city'),120),clean(p.get('state'),40),clean(p.get('postal_code'),5),service,
-              clean(p.get('website'),1000),clean(p.get('phone'),80)))
+              clean(p.get('credential_number'),100) or None,clean(p.get('expiration_date'),10) or None,clean(p.get('issuer'),100),clean(p.get('credential_source'),1000),clean(p.get('city'),120),clean(p.get('state'),40),clean(p.get('postal_code'),5),service,
+              clean(p.get('website'),1000),clean(p.get('phone'),80),clean(p.get('submitter_email'),320),clean(p.get('submission_notes'),2000)))
             rid=cur.fetchone()[0]
         conn.commit();return rid
+    finally:conn.close()
+
+def list_pending_submissions_db():
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('''SELECT id,company,professional_name,credential,credential_type,credential_number,expiration_date,issuer,
+              credential_source,city,state,postal_code,website,phone,submitter_email_private,submission_notes_private,created_at
+              FROM pro_directory WHERE status='pending' ORDER BY created_at ASC LIMIT 250''')
+            keys=['id','company','professional_name','credential','credential_type','credential_number','expiration_date','issuer','credential_source','city','state','postal_code','website','phone','submitter_email_private','submission_notes_private','created_at']
+            return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
 REPORT_REASONS={'person_no_longer_affiliated','credential_expired','credential_incorrect','wrong_company','wrong_phone','duplicate_profile','company_closed','impersonation_concern','misleading_credential_claim','other'}
@@ -925,6 +942,9 @@ class handler(BaseHTTPRequestHandler):
                 status=clean((qs.get('status') or ['pending'])[0],20)
                 if status not in ('pending','needs_evidence','approved','rejected','withdrawn'):return self.sendj(400,{'error':'Choose a valid claim status.'})
                 claims=list_profile_claims_db(status);return self.sendj(200,{'claims':claims,'count':len(claims),'status':status},include_private=True)
+            if view=='admin_submissions':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                submissions=list_pending_submissions_db();return self.sendj(200,{'submissions':submissions,'count':len(submissions),'status':'pending'},include_private=True)
             if view=='admin_reverification':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, or temporarily unverifiable credential records'})
@@ -970,7 +990,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             n=int(self.headers.get('Content-Length','0'))
             if n<2 or n>30000:raise ValueError('Invalid request.')
-            p=json.loads(self.rfile.read(n).decode());required=['company','professional_name','credential','issuer','credential_source','postal_code']
+            p=json.loads(self.rfile.read(n).decode());required=['company','professional_name','credential','issuer','credential_source','postal_code','submitter_email']
             if clean(p.get('action'),40)=='claim_profile':
                 if clean(p.get('website'),200):raise ValueError('Invalid request.')
                 if clean(p.get('target_type'),20) not in ('company','professional'):raise ValueError('Choose a valid record type.')
@@ -998,8 +1018,10 @@ class handler(BaseHTTPRequestHandler):
                 if len(clean(p.get('details'),3000))<10:raise ValueError('Please provide enough detail for review.')
                 if clean(p.get('source_url')) and not valid_http_url(clean(p.get('source_url'),1000)):raise ValueError('Use a valid public source URL.')
                 rid=report_problem_db(p);return self.sendj(201,{'id':rid,'status':'pending','message':'Report received for human review. No listing or verification status changes automatically.'})
-            if any(not clean(p.get(k)) for k in required):raise ValueError('Company, professional name, credential, issuer, verification source, and ZIP are required.')
+            if any(not clean(p.get(k)) for k in required):raise ValueError('Company, professional name, credential, issuer, verification source, ZIP, and contact email are required.')
             if not valid_zip(clean(p.get('postal_code'),5)):raise ValueError('Enter a valid 5-digit ZIP code.')
+            if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',clean(p.get('submitter_email'),320)):raise ValueError('Enter a valid contact email address.')
+            if clean(p.get('expiration_date')) and not re.fullmatch(r'\d{4}-\d{2}-\d{2}',clean(p.get('expiration_date'),10)):raise ValueError('Use a valid credential expiration date.')
             if not valid_http_url(clean(p.get('credential_source'),1000)):raise ValueError('Use a valid official-source URL.')
             for field in ('website',):
                 if clean(p.get(field)) and not valid_http_url(clean(p.get(field),1000)):raise ValueError('Use a valid public business website URL.')
