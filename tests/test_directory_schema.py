@@ -121,6 +121,20 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn('Administrative authorization required.',source)
         self.assertIn('directory_reports ADD COLUMN IF NOT EXISTS review_note',source)
 
+    def test_reverification_queue_is_private_and_covers_expiration_source_and_due_dates(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn("view=='admin_reverification'",source)
+        self.assertIn('list_reverification_queue_db()',source)
+        self.assertIn("cr.expiration_date<CURRENT_DATE",source)
+        self.assertIn("cr.recheck_due_at<=now()",source)
+        self.assertIn("cr.source_available=FALSE",source)
+
+    def test_verified_company_filter_excludes_stale_or_unavailable_normalized_credentials(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn("cr.expiration_date IS NULL OR cr.expiration_date>=CURRENT_DATE",source)
+        self.assertIn("cr.recheck_due_at IS NULL OR cr.recheck_due_at>now()",source)
+        self.assertIn("cr.verified_at IS NOT NULL AND cr.source_available=TRUE",source)
+
     def test_status_constraints_keep_claim_and_verification_separate(self):
         sql = '\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)
         self.assertIn("claim_status IN ('unclaimed','claim_pending','claimed')", sql)

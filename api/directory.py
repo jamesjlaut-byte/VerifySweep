@@ -675,7 +675,12 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
         if state:where.append('UPPER(c.state)=UPPER(%s)');params.append(state)
         if verified_only:
             where.append('''EXISTS (SELECT 1 FROM directory_professionals p JOIN directory_credentials cr ON cr.professional_id=p.id
-              WHERE p.company_id=c.id AND p.public_state='active' AND cr.verification_status='verified_from_official_source')''')
+              WHERE p.company_id=c.id AND p.public_state='active'
+              AND cr.verification_status='verified_from_official_source'
+              AND cr.verified_at IS NOT NULL AND cr.source_available=TRUE
+              AND (cr.expiration_date IS NULL OR cr.expiration_date>=CURRENT_DATE)
+              AND (cr.recheck_due_at IS NULL OR cr.recheck_due_at>now())
+              AND COALESCE(cr.credential_status,'pending_verification') NOT IN ('expired','reverification_required','unable_to_verify','disputed','archived'))''')
         with conn.cursor() as cur:
             cur.execute(f'''SELECT c.id,c.canonical_name,c.website,c.phone,c.city,c.state,c.postal_code,
               c.public_status,c.claim_status,c.last_reviewed_at,c.verification_due_at
@@ -808,6 +813,44 @@ def list_reports_db(status='pending'):
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
+def list_reverification_queue_db():
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('''SELECT source_record,credential_id,professional_id,professional_name,company,issuer,credential_type,
+                official_source_url,verified_at,last_checked_at,expiration_date,recheck_due_at,review_reason
+              FROM (
+                SELECT 'normalized'::text AS source_record,cr.id::text AS credential_id,p.id::text AS professional_id,
+                  p.professional_name,COALESCE(c.canonical_name,'') AS company,cr.issuer,
+                  COALESCE(cr.credential_name,cr.credential_type) AS credential_type,cr.official_source_url,
+                  cr.verified_at,cr.last_checked_at,cr.expiration_date,cr.recheck_due_at,
+                  CASE WHEN cr.expiration_date<CURRENT_DATE OR cr.credential_status='expired' THEN 'EXPIRED'
+                    WHEN cr.source_available=FALSE OR cr.credential_status='unable_to_verify' THEN 'SOURCE UNAVAILABLE'
+                    WHEN cr.credential_status='disputed' THEN 'DISPUTED'
+                    ELSE 'REVERIFICATION REQUIRED' END AS review_reason
+                FROM directory_credentials cr
+                JOIN directory_professionals p ON p.id=cr.professional_id
+                LEFT JOIN directory_companies c ON c.id=p.company_id
+                WHERE cr.verification_status='verified_from_official_source'
+                  AND (cr.expiration_date<CURRENT_DATE OR cr.recheck_due_at<=now() OR cr.source_available=FALSE
+                    OR cr.credential_status IN ('expired','reverification_required','unable_to_verify','disputed'))
+                UNION ALL
+                SELECT 'legacy'::text,id::text,id::text,professional_name,company,issuer,
+                  COALESCE(credential_type,credential),credential_source,verified_at,source_last_checked_at,
+                  NULL::date,recheck_due_at,
+                  CASE WHEN source_available=FALSE THEN 'SOURCE UNAVAILABLE' ELSE 'REVERIFICATION REQUIRED' END
+                FROM pro_directory
+                WHERE status='verified' AND verification_status='verified_from_official_source'
+                  AND (recheck_due_at<=now() OR source_available=FALSE)
+              ) due_records
+              ORDER BY COALESCE(recheck_due_at,expiration_date::timestamptz) ASC NULLS FIRST,professional_name
+              LIMIT 250''')
+            keys=['source_record','credential_id','professional_id','professional_name','company','issuer','credential_type','official_source_url','verified_at','last_checked_at','expiration_date','recheck_due_at','review_reason']
+            return [rowdict(keys,row) for row in cur.fetchall()]
+    finally:conn.close()
+
 def review_report_db(report_id,status,reviewer,note):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
@@ -835,6 +878,9 @@ class handler(BaseHTTPRequestHandler):
                 status=clean((qs.get('status') or ['pending'])[0],20)
                 if status not in ('pending','reviewing','resolved','dismissed'):return self.sendj(400,{'error':'Choose a valid report status.'})
                 reports=list_reports_db(status);return self.sendj(200,{'reports':reports,'count':len(reports),'status':status})
+            if view=='admin_reverification':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, or temporarily unverifiable credential records'})
             if view=='companies':
                 identifier=clean((qs.get('id') or [''])[0],160)
                 if identifier:
