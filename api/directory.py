@@ -506,10 +506,10 @@ def normalized_contact(item):
 def data_quality_indexes(records):
     domains={};phones={}
     for record in records:
-        name=clean(record.get('company'),200)
+        identity=company_key(record)
         domain,phone=normalized_contact(record)
-        if domain:domains.setdefault(domain,set()).add(name)
-        if len(phone)>=10:phones.setdefault(phone,set()).add(name)
+        if domain:domains.setdefault(domain,set()).add(identity)
+        if len(phone)>=10:phones.setdefault(phone,set()).add(identity)
     return domains,phones
 
 def review_signals(source,domain_index,phone_index):

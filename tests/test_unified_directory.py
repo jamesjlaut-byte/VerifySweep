@@ -95,12 +95,17 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('fallback_by_key={company_key(item):item for item in fallback}',source)
 
     def test_shared_contact_signals_are_neutral_review_indicators(self):
-        records=[{'company':'Alpha Chimney','website':'https://shared.example/'},{'company':'Beta Chimney','website':'https://shared.example/'}]
+        records=[{'company':'Alpha Chimney','website':'https://alpha.example/','phone':'(555) 111-2222'},{'company':'Beta Chimney','website':'https://beta.example/','phone':'555-111-2222'}]
         domains,phones=directory.data_quality_indexes(records)
         signals=directory.review_signals(records[0],domains,phones)
         self.assertEqual(signals[0]['status'],'REVIEW NEEDED')
-        self.assertEqual(signals[0]['signal'],'SHARED WEBSITE DOMAIN')
+        self.assertEqual(signals[0]['signal'],'SHARED BUSINESS PHONE')
         self.assertIn('does not establish',signals[0]['public_explanation'])
+
+    def test_same_domain_aliases_do_not_create_public_warning(self):
+        records=[{'company':'Example Chimney LLC','website':'https://example.test/'},{'company':'Example Chimney','website':'https://example.test/'}]
+        domains,phones=directory.data_quality_indexes(records)
+        self.assertEqual(directory.review_signals(records[0],domains,phones),[])
 
     def test_founder_affiliated_company_has_no_special_status_or_rank(self):
         rows=directory.search_static_companies(state='TX')
