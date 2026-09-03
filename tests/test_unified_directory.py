@@ -117,7 +117,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),41)
+        self.assertGreaterEqual(len(csia),50)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
@@ -145,10 +145,17 @@ class UnifiedDirectoryTests(unittest.TestCase):
         rows=directory.search_static_companies(q='Chim Chimney Sweeps',state='PA',issuer='CSIA',verified_only=True)
         self.assertEqual(len(rows),1)
         self.assertTrue(
-            {'Tyler Bollinger','Isabella Weidman','Steven Wallower','Joe Corcoran','Ben Bowen-Aretz'}.issubset(
+            {
+                'Tyler Bollinger','Isabella Weidman','Steven Wallower','Joe Corcoran','Ben Bowen-Aretz',
+                'Jonathan Cross','Robert Green','Robert Pettit II','Benjamin Cross','Ted Demopoulos',
+            }.issubset(
                 set(rows[0]['reviewed_professional_names'])
             )
         )
+
+        curley=directory.search_static_companies(q="Lou Curley's Chimney Service",state='PA',issuer='CSIA',verified_only=True)
+        self.assertEqual(len(curley),1)
+        self.assertTrue({'Joe Soriano','Steven A Boppell','Dave Curley','Lou Curley'}.issubset(set(curley[0]['reviewed_professional_names'])))
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
