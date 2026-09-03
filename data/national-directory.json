@@ -4,7 +4,7 @@
   "source_generated_at": "2026-09-02",
   "built_at": "2026-09-02",
   "source_record_count": 356,
-  "canonical_record_count": 348,
+  "canonical_record_count": 347,
   "policy": "Candidate company discovery data. Company claims and professional leads are not verified credentials.",
   "records": [
     {
@@ -15316,7 +15316,7 @@
       "website": "https://fullservicechimney.com/",
       "normalized_domain": "fullservicechimney.com",
       "hq_city": "Kansas City metro",
-      "hq_state": "MO/KS",
+      "hq_state": "MO",
       "public_status": "unverified",
       "display_status": "UNVERIFIED COMPANY RECORD",
       "states_discovered": [
@@ -28344,7 +28344,8 @@
       "public_status": "unverified",
       "display_status": "UNVERIFIED COMPANY RECORD",
       "states_discovered": [
-        "MA"
+        "MA",
+        "RI"
       ],
       "service_locations": [
         {
@@ -28382,6 +28383,33 @@
           "evidence_type": "company_owned",
           "evidence_status": "active",
           "last_checked_at": null
+        },
+        {
+          "city": "Providence",
+          "state": "RI",
+          "area_type": "city",
+          "source_url": null,
+          "evidence_type": "not_recorded",
+          "evidence_status": "review_needed",
+          "last_checked_at": null
+        },
+        {
+          "city": "Rhode Island service territory",
+          "state": "RI",
+          "area_type": "city",
+          "source_url": null,
+          "evidence_type": "not_recorded",
+          "evidence_status": "review_needed",
+          "last_checked_at": null
+        },
+        {
+          "city": "Massachusetts",
+          "state": "RI",
+          "area_type": "city",
+          "source_url": null,
+          "evidence_type": "not_recorded",
+          "evidence_status": "review_needed",
+          "last_checked_at": null
         }
       ],
       "company_claims": [
@@ -28416,53 +28444,6 @@
           "type": "company_owned"
         }
       ],
-      "last_reviewed_at": null,
-      "record_notice": "Company discovery record only. Credential claims are not verified individual credentials."
-    },
-    {
-      "id": "national-57948d3f22395a",
-      "company": "The Original Chimney Sweep, Inc.",
-      "website": null,
-      "normalized_domain": null,
-      "hq_city": "Plainville",
-      "hq_state": "MA",
-      "public_status": "unverified",
-      "display_status": "UNVERIFIED COMPANY RECORD",
-      "states_discovered": [
-        "RI"
-      ],
-      "service_locations": [
-        {
-          "city": "Providence",
-          "state": "RI",
-          "area_type": "city",
-          "source_url": null,
-          "evidence_type": "not_recorded",
-          "evidence_status": "review_needed",
-          "last_checked_at": null
-        },
-        {
-          "city": "Rhode Island service territory",
-          "state": "RI",
-          "area_type": "city",
-          "source_url": null,
-          "evidence_type": "not_recorded",
-          "evidence_status": "review_needed",
-          "last_checked_at": null
-        },
-        {
-          "city": "Massachusetts",
-          "state": "RI",
-          "area_type": "city",
-          "source_url": null,
-          "evidence_type": "not_recorded",
-          "evidence_status": "review_needed",
-          "last_checked_at": null
-        }
-      ],
-      "company_claims": [],
-      "professional_candidates": [],
-      "sources": [],
       "last_reviewed_at": null,
       "record_notice": "Company discovery record only. Credential claims are not verified individual credentials."
     },

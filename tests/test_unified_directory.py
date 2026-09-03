@@ -2,6 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 SPEC=importlib.util.spec_from_file_location('directory_api',ROOT/'api'/'directory.py')
@@ -12,7 +13,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_national_seed_is_canonical_and_neutral(self):
         data=json.loads((ROOT/'data'/'national-directory.json').read_text())
         self.assertEqual(data['source_record_count'],356)
-        self.assertEqual(data['canonical_record_count'],348)
+        self.assertEqual(data['canonical_record_count'],347)
         domains=[x['normalized_domain'] for x in data['records'] if x.get('normalized_domain')]
         self.assertEqual(len(domains),len(set(domains)))
         self.assertTrue(all(x['public_status']=='unverified' for x in data['records']))
@@ -39,6 +40,23 @@ class UnifiedDirectoryTests(unittest.TestCase):
         identities={(x['hq_city'],x['hq_state']) for x in rows}
         self.assertIn(('Metamora','IL'),identities)
         self.assertIn(('Jackson','MS'),identities)
+
+    def test_research_confirmed_cross_state_record_is_merged(self):
+        rows=[x for x in directory.national_company_records() if x['company']=='The Original Chimney Sweep, Inc.']
+        self.assertEqual(len(rows),1)
+        self.assertEqual(set(rows[0]['states_discovered']),{'MA','RI'})
+
+    def test_zip_resolver_uses_fixed_host_and_sanitized_zip(self):
+        class Response:
+            status=200
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self,limit):return b'{"places":[{"place name":"Austin","state abbreviation":"TX"}]}'
+        directory.resolve_us_zip.cache_clear()
+        with patch.object(directory,'urlopen',return_value=Response()) as opened:
+            self.assertEqual(directory.resolve_us_zip('78701'),{'city':'Austin','state':'TX'})
+            self.assertEqual(opened.call_args.args[0].full_url,'https://api.zippopotam.us/us/78701')
+        self.assertIsNone(directory.resolve_us_zip('http://127.0.0.1'))
 
 
 if __name__=='__main__':unittest.main()

@@ -3,6 +3,7 @@ from functools import lru_cache
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+from urllib.request import Request, urlopen
 
 DB=os.environ.get('DATABASE_URL','')
 ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,6 +24,7 @@ OFFICIAL_SOURCES={
   'csia':'https://web.csia.org/CSIA-Certified',
   'nfi':'https://www.nficertified.org/search-instructor/'
 }
+ZIP_LOOKUP_BASE='https://api.zippopotam.us/us/'
 NORMALIZED_DIRECTORY_SCHEMA=(
   '''CREATE TABLE IF NOT EXISTS directory_companies (
     id BIGSERIAL PRIMARY KEY, canonical_name TEXT NOT NULL, normalized_name TEXT NOT NULL,
@@ -123,6 +125,21 @@ def valid_zip(z): return bool(re.fullmatch(r'\d{5}',z or ''))
 def valid_http_url(v):
     try:return urlparse(v).scheme in ('http','https') and bool(urlparse(v).hostname)
     except:return False
+
+@lru_cache(maxsize=512)
+def resolve_us_zip(zipcode):
+    """Resolve a valid US ZIP through one fixed public endpoint; never follows user hosts."""
+    if not valid_zip(zipcode):return None
+    try:
+        request=Request(ZIP_LOOKUP_BASE+zipcode,headers={'Accept':'application/json','User-Agent':'VerifySweep-Directory/1.0'})
+        with urlopen(request,timeout=3) as response:
+            if response.status!=200:return None
+            payload=json.loads(response.read(32768).decode('utf-8'))
+        places=payload.get('places') or []
+        if not places:return None
+        city=clean(places[0].get('place name'),120);state=clean(places[0].get('state abbreviation'),2).upper()
+        return {'city':city,'state':state} if city and re.fullmatch(r'[A-Z]{2}',state) else None
+    except Exception:return None
 
 def dbconn():
     if not DB:return None
@@ -481,7 +498,15 @@ class handler(BaseHTTPRequestHandler):
                 if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
                 if not any((z,q,city,state)):return self.sendj(400,{'error':'Search by ZIP, city, state, or business name.'})
                 results,connected=search_companies_db(z,q,city,state)
+                resolved=resolve_us_zip(z) if z and not (city or state) else None
+                if resolved:
+                    nearby,nearby_connected=search_companies_db('',q,resolved['city'],resolved['state'])
+                    existing={company_key(item) for item in results}
+                    results.extend(item for item in nearby if company_key(item) not in existing)
+                    results.sort(key=lambda item:(0 if item.get('matched_service_area') else 1,clean(item.get('company'),200).lower()))
+                    connected=connected or nearby_connected
                 return self.sendj(200,{'results':results,'count':len(results),'database_connected':connected,'public_business_fields_only':True,
+                  'resolved_location':resolved,
                   'note':'UNVERIFIED means VerifySweep has not completed verification. It does not indicate fraud, misconduct, incompetence, or wrongdoing.'})
             if view!='professionals':return self.sendj(400,{'error':'Choose a supported directory view.'})
             identifier=clean((qs.get('id') or [''])[0],30)

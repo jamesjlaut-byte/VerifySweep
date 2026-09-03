@@ -7,6 +7,12 @@ import re
 from datetime import date
 from urllib.parse import urlparse
 
+CONFIRMED_SINGLE_COMPANIES={
+    "a step in time chimney sweeps",
+    "the original chimney sweep, inc.",
+    "dakota chimney & restoration, inc.",
+}
+
 
 def clean(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
@@ -18,6 +24,11 @@ def domain(value):
         return host[4:] if host.startswith("www.") else host
     except ValueError:
         return ""
+
+
+def state_code(value):
+    match=re.search(r"(?:^|/)([A-Z]{2})(?:/|$)",clean(value).upper())
+    return match.group(1) if match else ""
 
 
 def location(value, fallback_state=""):
@@ -55,9 +66,12 @@ def merge_records(records):
     for index, row in enumerate(records):
         website_domain = domain(row.get("website"))
         name = clean(row.get("company")).casefold()
-        hq = (clean(row.get("hq_city")).casefold(), clean(row.get("hq_state")).upper())
+        hq = (clean(row.get("hq_city")).casefold(), state_code(row.get("hq_state")))
         # Same domain is the strongest supplied identifier. Keep same-name/different-HQ records separate.
-        key = ("domain", website_domain) if website_domain else ("identity", name, *hq, index)
+        if name in CONFIRMED_SINGLE_COMPANIES:
+            key=("research_confirmed",name)
+        else:
+            key = ("domain", website_domain) if website_domain else ("identity", name, *hq, index)
         groups.setdefault(key, []).append(row)
 
     output = []
@@ -66,7 +80,7 @@ def merge_records(records):
         website = clean(primary.get("website"))
         website_domain = domain(website)
         hq_city = clean(primary.get("hq_city"))
-        hq_state = clean(primary.get("hq_state")).upper()
+        hq_state = state_code(primary.get("hq_state"))
         company = clean(primary.get("company"))
         service_rows = []
         service_seen = set()
