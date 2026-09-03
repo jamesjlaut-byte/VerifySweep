@@ -97,9 +97,15 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_ncsg_records_are_named_current_source_credentials(self):
         records=directory.static_records()
         ncsg=[row for row in records if row.get('issuer')=='NCSG']
-        self.assertGreaterEqual(len(ncsg),30)
+        self.assertGreaterEqual(len(ncsg),41)
         self.assertTrue(all(row['holder'] and row['company'] for row in ncsg))
-        self.assertTrue(all(row['credential']=='Accredited Certified Chimney Professional' for row in ncsg))
+        allowed={
+            'Accredited Certified Chimney Professional',
+            'Accredited Certified Chimney Journeyman',
+            'Master Chimney Professional',
+            'Honorary Master Chimney Professional',
+        }
+        self.assertTrue(all(row['credential'] in allowed for row in ncsg))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in ncsg))
         self.assertTrue(all(row['source']=='https://ncsg.org/find-a-sweep/find-a-certified-sweep' for row in ncsg))
 
@@ -113,6 +119,12 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(rows[0]['reviewed_professionals'][0]['display_status'], 'VERIFIED FROM OFFICIAL SOURCE')
         detail,_=directory.detail_company(rows[0]['id'])
         self.assertEqual([person['holder'] for person in detail['professionals']], ['Matthew Mirabal'])
+
+    def test_multiple_credentials_remain_separate_for_one_individual(self):
+        rows,_=directory.search_companies_db(q='Paul Robison',verified_only=True)
+        self.assertEqual(len(rows),1)
+        credentials=[person['credential'] for person in rows[0]['reviewed_professionals'] if person['holder']=='Paul Robison']
+        self.assertEqual(credentials,['Accredited Certified Chimney Journeyman','Master Chimney Professional'])
 
 
 if __name__=='__main__':unittest.main()
