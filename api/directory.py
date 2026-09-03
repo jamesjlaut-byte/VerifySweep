@@ -104,6 +104,13 @@ NORMALIZED_DIRECTORY_SCHEMA=(
     review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending','reviewing','resolved','dismissed')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ
   )''',
+  '''CREATE TABLE IF NOT EXISTS directory_profile_claim_requests (
+    id BIGSERIAL PRIMARY KEY, target_type TEXT NOT NULL CHECK (target_type IN ('company','professional')),
+    target_id TEXT NOT NULL, claimant_name TEXT NOT NULL, claimant_email_private TEXT NOT NULL,
+    business_phone_private TEXT, evidence_url_private TEXT, details TEXT NOT NULL,
+    review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending','needs_evidence','approved','rejected','withdrawn')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
   '''CREATE TABLE IF NOT EXISTS directory_legacy_migration_map (
     id BIGSERIAL PRIMARY KEY, legacy_table TEXT NOT NULL DEFAULT 'pro_directory', legacy_record_id BIGINT NOT NULL,
     professional_id BIGINT REFERENCES directory_professionals(id) ON DELETE SET NULL,
@@ -233,6 +240,7 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   'CREATE INDEX IF NOT EXISTS directory_verification_review_due_idx ON directory_verification_records (review_due_at,status)',
   'CREATE INDEX IF NOT EXISTS directory_evidence_verification_idx ON directory_evidence (verification_id,visibility)',
   'CREATE INDEX IF NOT EXISTS directory_reports_review_idx ON directory_reports (review_status,created_at)',
+  'CREATE INDEX IF NOT EXISTS directory_profile_claim_requests_review_idx ON directory_profile_claim_requests (review_status,created_at)',
   'ALTER TABLE directory_reports ADD COLUMN IF NOT EXISTS reviewed_by TEXT',
   'ALTER TABLE directory_reports ADD COLUMN IF NOT EXISTS review_note TEXT',
   'ALTER TABLE directory_reports ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()',
@@ -654,6 +662,13 @@ def detail_company(identifier):
     company=dict(company);company['professionals']=company_professionals(company)
     return company,connected
 
+def directory_target_exists(target_type,target_id):
+    if target_type=='professional':
+        return bool(detail_db(int(target_id)) if target_id.isdigit() else detail_static(target_id))
+    if target_type=='company':
+        result,_=detail_company(target_id);return bool(result)
+    return False
+
 def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type=''):
     fallback=search_static_companies(zipcode,q,city,state,verified_only,radius,issuer,credential_type)
     conn=dbconn()
@@ -804,15 +819,39 @@ def report_problem_db(p):
         conn.commit();return rid
     finally:conn.close()
 
+def submit_profile_claim_db(p):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('''INSERT INTO directory_profile_claim_requests(target_type,target_id,claimant_name,claimant_email_private,business_phone_private,evidence_url_private,details)
+              VALUES(%s,%s,%s,%s,%s,%s,%s) RETURNING id''',(clean(p.get('target_type'),20),clean(p.get('target_id'),160),clean(p.get('claimant_name'),160),clean(p.get('claimant_email'),320),clean(p.get('business_phone'),80) or None,clean(p.get('evidence_url'),1000) or None,clean(p.get('details'),3000)))
+            rid=cur.fetchone()[0]
+        conn.commit();return rid
+    finally:conn.close()
+
+def list_profile_claims_db(status='pending'):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('''SELECT id,target_type,target_id,claimant_name,claimant_email_private,business_phone_private,evidence_url_private,details,review_status,created_at,updated_at
+              FROM directory_profile_claim_requests WHERE review_status=%s ORDER BY created_at ASC LIMIT 200''',(status,))
+            keys=['id','target_type','target_id','claimant_name','claimant_email_private','business_phone_private','evidence_url_private','details','review_status','created_at','updated_at']
+            return [rowdict(keys,row) for row in cur.fetchall()]
+    finally:conn.close()
+
 def list_reports_db(status='pending'):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
     try:
         ensure(conn)
         with conn.cursor() as cur:
-            cur.execute('''SELECT id,target_type,target_id,reason,details,source_url,review_status,created_at,reviewed_by,review_note,updated_at
+            cur.execute('''SELECT id,target_type,target_id,reason,details,source_url,reporter_email_private,review_status,created_at,reviewed_by,review_note,updated_at
               FROM directory_reports WHERE review_status=%s ORDER BY created_at ASC LIMIT 200''',(status,))
-            keys=['id','target_type','target_id','reason','details','source_url','review_status','created_at','reviewed_by','review_note','updated_at']
+            keys=['id','target_type','target_id','reason','details','source_url','reporter_email_private','review_status','created_at','reviewed_by','review_note','updated_at']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
@@ -870,8 +909,8 @@ def review_report_db(report_id,status,reviewer,note):
     finally:conn.close()
 
 class handler(BaseHTTPRequestHandler):
-    def sendj(self,code,p):
-        b=json.dumps(public_directory_record(p),default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
+    def sendj(self,code,p,include_private=False):
+        b=json.dumps(p if include_private else public_directory_record(p),default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
     def do_OPTIONS(self):self.send_response(204);self.send_header('Allow','GET, POST, OPTIONS');self.end_headers()
     def do_GET(self):
         try:
@@ -880,7 +919,12 @@ class handler(BaseHTTPRequestHandler):
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 status=clean((qs.get('status') or ['pending'])[0],20)
                 if status not in ('pending','reviewing','resolved','dismissed'):return self.sendj(400,{'error':'Choose a valid report status.'})
-                reports=list_reports_db(status);return self.sendj(200,{'reports':reports,'count':len(reports),'status':status})
+                reports=list_reports_db(status);return self.sendj(200,{'reports':reports,'count':len(reports),'status':status},include_private=True)
+            if view=='admin_claims':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                status=clean((qs.get('status') or ['pending'])[0],20)
+                if status not in ('pending','needs_evidence','approved','rejected','withdrawn'):return self.sendj(400,{'error':'Choose a valid claim status.'})
+                claims=list_profile_claims_db(status);return self.sendj(200,{'claims':claims,'count':len(claims),'status':status},include_private=True)
             if view=='admin_reverification':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, or temporarily unverifiable credential records'})
@@ -927,6 +971,17 @@ class handler(BaseHTTPRequestHandler):
             n=int(self.headers.get('Content-Length','0'))
             if n<2 or n>30000:raise ValueError('Invalid request.')
             p=json.loads(self.rfile.read(n).decode());required=['company','professional_name','credential','issuer','credential_source','postal_code']
+            if clean(p.get('action'),40)=='claim_profile':
+                if clean(p.get('website'),200):raise ValueError('Invalid request.')
+                if clean(p.get('target_type'),20) not in ('company','professional'):raise ValueError('Choose a valid record type.')
+                if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}',clean(p.get('target_id'),160)):raise ValueError('Choose a valid directory record.')
+                if not directory_target_exists(clean(p.get('target_type'),20),clean(p.get('target_id'),160)):raise ValueError('Directory profile not found.')
+                if len(clean(p.get('claimant_name'),160))<2:raise ValueError('Enter your name.')
+                email=clean(p.get('claimant_email'),320)
+                if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise ValueError('Enter a valid email address.')
+                if clean(p.get('evidence_url')) and not valid_http_url(clean(p.get('evidence_url'),1000)):raise ValueError('Use a valid public evidence URL.')
+                if len(clean(p.get('details'),3000))<10:raise ValueError('Explain your connection to this profile.')
+                rid=submit_profile_claim_db(p);return self.sendj(201,{'id':rid,'status':'pending','message':'Claim request received for human review. Claiming a profile does not verify identity, affiliation, credentials, or the company.'})
             if clean(p.get('action'),40)=='review_report':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 try:report_id=int(p.get('report_id'))

@@ -53,6 +53,7 @@ class DirectorySchemaTests(unittest.TestCase):
             'directory_sources',
             'directory_verification_records',
             'directory_evidence',
+            'directory_profile_claim_requests',
             'directory_legacy_migration_map',
             'directory_company_sources',
             'directory_claims',
@@ -120,6 +121,17 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn("'review_directory_report'",source)
         self.assertIn('Administrative authorization required.',source)
         self.assertIn('directory_reports ADD COLUMN IF NOT EXISTS review_note',source)
+
+    def test_profile_claim_requests_stay_pending_and_private(self):
+        sql='\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn('CREATE TABLE IF NOT EXISTS directory_profile_claim_requests',sql)
+        self.assertIn("review_status TEXT NOT NULL DEFAULT 'pending'",sql)
+        self.assertIn('claimant_email_private',sql)
+        self.assertIn("clean(p.get('action'),40)=='claim_profile'",source)
+        self.assertIn("view=='admin_claims'",source)
+        self.assertIn('directory_target_exists',source)
+        self.assertIn('Claiming a profile does not verify identity, affiliation, credentials, or the company.',source)
 
     def test_reverification_queue_is_private_and_covers_expiration_source_and_due_dates(self):
         source=(ROOT/'api'/'directory.py').read_text()
