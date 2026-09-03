@@ -301,15 +301,33 @@ def service_locations_for(item,fallback_state=''):
         if key not in seen:rows.append({'city':city,'state':fallback_state});seen.add(key)
     return rows
 
-def search_static_companies(zipcode='',q='',city='',state=''):
+def reviewed_people_for_company(company,city,state,zipcode):
+    people=[]
+    for person in static_records():
+        if clean(person.get('company'),200).lower()!=company.lower():continue
+        same_zip=bool(zipcode) and clean(person.get('zip'),5)==zipcode
+        same_place=clean(person.get('city'),120).lower()==city.lower() and clean(person.get('state'),40).lower()==state.lower()
+        if same_zip or same_place:
+            people.append(clean(person.get('holder'),200))
+    return sorted(set(value for value in people if value),key=str.lower)
+
+def search_static_companies(zipcode='',q='',city='',state='',verified_only=False):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
-    for source in [*static_company_records(),*national_company_records()]:
+    company_sources=[*static_company_records(),*national_company_records()]
+    known={(clean(x.get('company'),200).lower(),clean(x.get('zip') or x.get('postal_code'),5),clean(x.get('city') or x.get('hq_city'),120).lower(),clean(x.get('state') or x.get('hq_state'),40).lower()) for x in company_sources}
+    for person in static_records():
+        identity=(clean(person.get('company'),200).lower(),clean(person.get('zip'),5),clean(person.get('city'),120).lower(),clean(person.get('state'),40).lower())
+        if identity not in known:company_sources.append(person);known.add(identity)
+    for source in company_sources:
         company=clean(source.get('company'),200);company_city=clean(source.get('city') or source.get('hq_city'),120);company_state=clean(source.get('state') or source.get('hq_state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
         if clean(source.get('id'),160).startswith('national-') and not (source.get('website') or source.get('sources')):continue
+        reviewed_people=reviewed_people_for_company(company,company_city,company_state,company_zip)
         service_locations=service_locations_for(source,company_state);service_areas=[location['city'] for location in service_locations];service_counties=service_counties_for(source);service_area_names=' '.join([*(location['city']+' '+location['state'] for location in service_locations),*service_counties])
         candidate_names=' '.join(clean(p.get('name_or_note'),300) for p in source.get('professional_candidates') or [] if isinstance(p,dict))
-        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names,candidate_names)).lower()
+        reviewed_names=' '.join(reviewed_people)
+        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names,candidate_names,reviewed_names)).lower()
         if needle_tokens and not all(token in searchable for token in needle_tokens):continue
+        if verified_only and not reviewed_people:continue
         if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
         location_matches_city=[location for location in service_locations if location['city'].lower()==city_needle]
         if city_needle and city_needle!=company_city.lower() and not location_matches_city:continue
@@ -329,7 +347,8 @@ def search_static_companies(zipcode='',q='',city='',state=''):
           'history_note':clean(source.get('history_note'),500),'recognition_source_url':clean(source.get('recognition_source_url'),1000),
           'display_status':'UNVERIFIED',
           'company_claims':source.get('company_claims') or [],'professional_candidates':source.get('professional_candidates') or [],
-          'sources':source.get('sources') or []
+          'sources':source.get('sources') or [],'reviewed_professional_names':reviewed_people,
+          'verified_professional_count':len(reviewed_people)
         })
         checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
         if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
@@ -349,18 +368,22 @@ def search_static_companies(zipcode='',q='',city='',state=''):
             if incoming:
                 merged={json.dumps(value,sort_keys=True,default=str):value for value in [*(item.get(field) or []),*incoming]}
                 item[field]=list(merged.values())
+        if reviewed_people:
+            item['reviewed_professional_names']=sorted(set([*(item.get('reviewed_professional_names') or []),*reviewed_people]),key=str.lower)
+            item['verified_professional_count']=len(item['reviewed_professional_names'])
         matched=next((location for location in service_locations if location['city'].lower()==city_needle and (not state_needle or location['state'].lower()==state_needle)),None) if city_needle else None
         if matched:item['matched_service_area']=matched['city'];item['matched_service_state']=matched['state']
         exact_company=bool(needle) and needle==company.lower()
         starts_company=bool(needle) and company.lower().startswith(needle)
         if exact_company:rank,reason=0,'Exact company match'
         elif starts_company:rank,reason=1,'Company name match'
-        elif needle and candidate_names and all(token in candidate_names.lower() for token in needle_tokens):rank,reason=2,'Named professional research match'
-        elif city_needle and company_city.lower()==city_needle:rank,reason=3,'Business location match'
-        elif matched:rank,reason=4,'Published service area match'
-        elif state_needle and company_state.lower()==state_needle:rank,reason=5,'Business state match'
-        elif needle:rank,reason=6,'Company or directory information match'
-        else:rank,reason=7,'Directory match'
+        elif needle and reviewed_names and all(token in reviewed_names.lower() for token in needle_tokens):rank,reason=2,'Reviewed professional match'
+        elif needle and candidate_names and all(token in candidate_names.lower() for token in needle_tokens):rank,reason=3,'Named professional research match'
+        elif city_needle and company_city.lower()==city_needle:rank,reason=4,'Business location match'
+        elif matched:rank,reason=5,'Published service area match'
+        elif state_needle and company_state.lower()==state_needle:rank,reason=6,'Business state match'
+        elif needle:rank,reason=7,'Company or directory information match'
+        else:rank,reason=8,'Directory match'
         if item.get('match_rank') is None or rank<item['match_rank']:
             item['match_rank']=rank;item['match_reason']=reason
     return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item['company'].lower()))
@@ -383,16 +406,18 @@ def detail_company(identifier):
     company=dict(company);company['professionals']=company_professionals(company)
     return company,connected
 
-def search_companies_db(zipcode='',q='',city='',state=''):
-    fallback=search_static_companies(zipcode,q,city,state)
+def search_companies_db(zipcode='',q='',city='',state='',verified_only=False):
+    fallback=search_static_companies(zipcode,q,city,state,verified_only)
     conn=dbconn()
     if not conn:return fallback,False
     try:
         ensure(conn)
         where=['c.public_status=ANY(%s)'];params=[list(PUBLIC_COMPANY_STATUSES)]
         if q:
-            where.append('(c.canonical_name ILIKE %s OR COALESCE(c.normalized_domain,\'\') ILIKE %s OR COALESCE(c.city,\'\') ILIKE %s OR COALESCE(c.state,\'\') ILIKE %s OR COALESCE(c.postal_code,\'\') ILIKE %s)')
-            like=f'%{q}%';params.extend([like,like,like,like,like])
+            where.append('''(c.canonical_name ILIKE %s OR COALESCE(c.normalized_domain,'') ILIKE %s OR COALESCE(c.city,'') ILIKE %s OR COALESCE(c.state,'') ILIKE %s OR COALESCE(c.postal_code,'') ILIKE %s OR EXISTS (
+              SELECT 1 FROM directory_professionals p WHERE p.company_id=c.id AND p.professional_name ILIKE %s
+            ))''')
+            like=f'%{q}%';params.extend([like,like,like,like,like,like])
         if zipcode:
             where.append('''(c.postal_code=%s OR EXISTS (
               SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.postal_code=%s
@@ -402,6 +427,9 @@ def search_companies_db(zipcode='',q='',city='',state=''):
               SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.city ILIKE %s
             ))''');params.extend([city,city])
         if state:where.append('UPPER(c.state)=UPPER(%s)');params.append(state)
+        if verified_only:
+            where.append('''EXISTS (SELECT 1 FROM directory_professionals p JOIN directory_credentials cr ON cr.professional_id=p.id
+              WHERE p.company_id=c.id AND p.public_state='active' AND cr.verification_status='verified_from_official_source')''')
         with conn.cursor() as cur:
             cur.execute(f'''SELECT c.id,c.canonical_name,c.website,c.phone,c.city,c.state,c.postal_code,
               c.public_status,c.claim_status,c.last_reviewed_at,c.verification_due_at
@@ -501,13 +529,13 @@ class handler(BaseHTTPRequestHandler):
                 if identifier:
                     result,connected=detail_company(identifier)
                     return self.sendj(200 if result else 404,{'result':result,'database_connected':connected,'public_business_fields_only':True} if result else {'error':'Company record not found.'})
-                z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40)
+                z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40);verified_only=clean((qs.get('verified') or [''])[0],5) in ('1','true','yes')
                 if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
-                if not any((z,q,city,state)):return self.sendj(400,{'error':'Search by ZIP, city, state, or business name.'})
-                results,connected=search_companies_db(z,q,city,state)
+                if not any((z,q,city,state,verified_only)):return self.sendj(400,{'error':'Search by ZIP, city, state, business name, professional name, or reviewed credential record.'})
+                results,connected=search_companies_db(z,q,city,state,verified_only)
                 resolved=resolve_us_zip(z) if z and not (city or state) else None
                 if resolved:
-                    nearby,nearby_connected=search_companies_db('',q,resolved['city'],resolved['state'])
+                    nearby,nearby_connected=search_companies_db('',q,resolved['city'],resolved['state'],verified_only)
                     existing={company_key(item) for item in results}
                     results.extend(item for item in nearby if company_key(item) not in existing)
                     results.sort(key=lambda item:(0 if item.get('matched_service_area') else 1,clean(item.get('company'),200).lower()))

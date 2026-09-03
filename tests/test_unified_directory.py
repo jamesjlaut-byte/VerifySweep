@@ -74,5 +74,21 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(ranks,sorted(ranks))
         self.assertEqual(rows[0]['match_reason'],'Business location match')
 
+    def test_reviewed_professional_name_search_uses_reviewed_records(self):
+        rows=directory.search_static_companies(q='Pete Pohlman')
+        self.assertEqual(rows[0]['company'],'Black Velvet Chimney')
+        self.assertEqual(rows[0]['match_reason'],'Reviewed professional match')
+        self.assertEqual(rows[0]['reviewed_professional_names'],['Pete Pohlman'])
+        self.assertEqual(rows[0]['verified_professional_count'],1)
+
+    def test_reviewed_individual_filter_does_not_promote_company_claims(self):
+        rows=directory.search_static_companies(verified_only=True)
+        self.assertEqual({row['company'] for row in rows},{
+            'Black Velvet Chimney','Duct Time','Hill Country Air Duct And Chimney Sweeps LLC','Wolfman Chimney & Fireplace'
+        })
+        self.assertTrue(all(row['verified_professional_count']>0 for row in rows))
+        claims_only=directory.search_static_companies(q='1st Choice Chimney Commercial LLC')
+        self.assertEqual(claims_only[0]['verified_professional_count'],0)
+
 
 if __name__=='__main__':unittest.main()
