@@ -97,6 +97,13 @@ NORMALIZED_DIRECTORY_SCHEMA=(
     visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private','public')),
     created_by TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )''',
+  '''CREATE TABLE IF NOT EXISTS directory_reports (
+    id BIGSERIAL PRIMARY KEY, target_type TEXT NOT NULL CHECK (target_type IN ('company','professional')),
+    target_id TEXT NOT NULL, reason TEXT NOT NULL CHECK (reason IN ('person_no_longer_affiliated','credential_expired','credential_incorrect','wrong_company','wrong_phone','duplicate_profile','company_closed','impersonation_concern','misleading_credential_claim','other')),
+    details TEXT NOT NULL, source_url TEXT, reporter_email_private TEXT,
+    review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending','reviewing','resolved','dismissed')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), resolved_at TIMESTAMPTZ
+  )''',
   '''CREATE TABLE IF NOT EXISTS directory_legacy_migration_map (
     id BIGSERIAL PRIMARY KEY, legacy_table TEXT NOT NULL DEFAULT 'pro_directory', legacy_record_id BIGINT NOT NULL,
     professional_id BIGINT REFERENCES directory_professionals(id) ON DELETE SET NULL,
@@ -225,6 +232,7 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   'CREATE INDEX IF NOT EXISTS directory_verification_subject_idx ON directory_verification_records (subject_type,subject_id,status)',
   'CREATE INDEX IF NOT EXISTS directory_verification_review_due_idx ON directory_verification_records (review_due_at,status)',
   'CREATE INDEX IF NOT EXISTS directory_evidence_verification_idx ON directory_evidence (verification_id,visibility)',
+  'CREATE INDEX IF NOT EXISTS directory_reports_review_idx ON directory_reports (review_status,created_at)',
   'CREATE INDEX IF NOT EXISTS directory_migration_status_idx ON directory_legacy_migration_map (migration_status,legacy_record_id)',
   'CREATE INDEX IF NOT EXISTS directory_sources_company_idx ON directory_company_sources (company_id)',
   'CREATE INDEX IF NOT EXISTS directory_claims_queue_idx ON directory_claims (review_status,created_at)',
@@ -768,6 +776,19 @@ def submit_db(p):
         conn.commit();return rid
     finally:conn.close()
 
+REPORT_REASONS={'person_no_longer_affiliated','credential_expired','credential_incorrect','wrong_company','wrong_phone','duplicate_profile','company_closed','impersonation_concern','misleading_credential_claim','other'}
+def report_problem_db(p):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('''INSERT INTO directory_reports(target_type,target_id,reason,details,source_url,reporter_email_private)
+              VALUES(%s,%s,%s,%s,%s,%s) RETURNING id''',(clean(p.get('target_type'),20),clean(p.get('target_id'),160),clean(p.get('reason'),60),clean(p.get('details'),3000),clean(p.get('source_url'),1000) or None,clean(p.get('reporter_email'),320) or None))
+            rid=cur.fetchone()[0]
+        conn.commit();return rid
+    finally:conn.close()
+
 class handler(BaseHTTPRequestHandler):
     def sendj(self,code,p):
         b=json.dumps(public_directory_record(p),default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -818,6 +839,14 @@ class handler(BaseHTTPRequestHandler):
             n=int(self.headers.get('Content-Length','0'))
             if n<2 or n>30000:raise ValueError('Invalid request.')
             p=json.loads(self.rfile.read(n).decode());required=['company','professional_name','credential','issuer','credential_source','postal_code']
+            if clean(p.get('action'),40)=='report_problem':
+                if clean(p.get('website'),200):raise ValueError('Invalid request.')
+                if clean(p.get('target_type'),20) not in ('company','professional'):raise ValueError('Choose a valid record type.')
+                if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}',clean(p.get('target_id'),160)):raise ValueError('Choose a valid directory record.')
+                if clean(p.get('reason'),60) not in REPORT_REASONS:raise ValueError('Choose a valid report reason.')
+                if len(clean(p.get('details'),3000))<10:raise ValueError('Please provide enough detail for review.')
+                if clean(p.get('source_url')) and not valid_http_url(clean(p.get('source_url'),1000)):raise ValueError('Use a valid public source URL.')
+                rid=report_problem_db(p);return self.sendj(201,{'id':rid,'status':'pending','message':'Report received for human review. No listing or verification status changes automatically.'})
             if any(not clean(p.get(k)) for k in required):raise ValueError('Company, professional name, credential, issuer, verification source, and ZIP are required.')
             if not valid_zip(clean(p.get('postal_code'),5)):raise ValueError('Enter a valid 5-digit ZIP code.')
             if not valid_http_url(clean(p.get('credential_source'),1000)):raise ValueError('Use a valid official-source URL.')
