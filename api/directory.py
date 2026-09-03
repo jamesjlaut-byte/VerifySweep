@@ -364,7 +364,7 @@ def detail_static(identifier):
                 same_company=clean(candidate.get('company'),200).lower()==clean(item.get('company'),200).lower()
                 same_state=clean(candidate.get('state'),40).lower()==clean(item.get('state'),40).lower()
                 if not (same_person and same_company and same_state):continue
-                credential={k:candidate.get(k) for k in ('id','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note')}
+                credential={k:candidate.get(k) for k in ('id','credential','credential_type','credential_number','issuer','source','issued_date','expiration_date','verified_at','last_checked_at','recheck_due_at','source_available','source_note','self_reported')}
                 credential['display_status'],credential['status_note']=static_status(candidate);credentials.append(credential)
             item['credentials']=sorted(credentials,key=lambda value:(clean(value.get('issuer'),100),clean(value.get('credential_type') or value.get('credential'),200)))
             return public_directory_record(item)
@@ -461,7 +461,12 @@ def reviewed_professionals_for_company(company,city,state,zipcode):
               'id':clean(person.get('id'),160),'holder':clean(person.get('holder'),200),
               'credential':clean(person.get('credential_type') or person.get('credential'),200),
               'issuer':clean(person.get('issuer'),100),'source':clean(person.get('source'),1000),
-              'last_checked_at':clean(person.get('last_checked_at'),40),
+              'credential_number':clean(person.get('credential_number'),100),
+              'expiration_date':clean(person.get('expiration_date'),40),
+              'verified_at':clean(person.get('verified_at'),40),
+              'last_checked_at':clean(person.get('last_checked_at'),40),'recheck_due_at':clean(person.get('recheck_due_at'),40),
+              'identity_status':clean(person.get('identity_status'),60).upper() or 'UNKNOWN',
+              'company_affiliation_status':clean(person.get('company_affiliation_status'),60).upper() or 'UNKNOWN',
               'display_status':label,'status_note':note
             })
     unique={person['id'] or '|'.join((person['holder'],person['credential'],person['issuer'])):person for person in people if person['holder']}
