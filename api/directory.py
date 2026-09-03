@@ -391,7 +391,8 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         else:rank,reason=8,'Directory match'
         if item.get('match_rank') is None or rank<item['match_rank']:
             item['match_rank']=rank;item['match_reason']=reason
-    return sorted(groups.values(),key=lambda item:(0 if item.get('public_status')=='verified' else 1,item.get('match_rank',99),item['company'].lower()))
+    # Verification status is descriptive, never an affiliated or founder-based ranking signal.
+    return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item['company'].lower()))
 
 def company_professionals(company):
     rows=[]
@@ -447,7 +448,7 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False):
                 item=rowdict(keys,raw);item['display_status']=company_status_label(item.get('public_status'));rows.append(item)
             seen={company_key(item) for item in rows}
             rows.extend(item for item in fallback if company_key(item) not in seen)
-            rows.sort(key=lambda item:(0 if item.get('public_status')=='verified' else 1,clean(item.get('company'),200).lower()))
+            rows.sort(key=lambda item:clean(item.get('company'),200).lower())
             return rows,True
     finally:conn.close()
 

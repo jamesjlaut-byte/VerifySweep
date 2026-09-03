@@ -127,9 +127,9 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(hill_country['city'], 'Spring Branch')
         self.assertEqual(hill_country['matched_service_area'], 'Austin')
         self.assertIn('San Antonio', hill_country['service_areas'])
-        self.assertEqual(hill_country['display_status'], 'BUSINESS IDENTITY VERIFIED')
-        self.assertEqual(hill_country['public_status'], 'verified')
-        self.assertEqual(hill_country['verification_scope'], 'business_identity_and_published_service_areas')
+        self.assertEqual(hill_country['display_status'], 'UNVERIFIED')
+        self.assertEqual(hill_country['public_status'], 'unverified')
+        self.assertFalse(hill_country.get('verification_scope'))
 
     def test_black_velvet_service_area_and_named_credential_stay_separate(self):
         rows = DIRECTORY.search_static_companies(city='Fort Worth', state='TX')
