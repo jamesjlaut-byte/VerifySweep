@@ -198,6 +198,14 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn('Blue Collar Chimney', waco)
         self.assertIn('Ables Top Hat Home Services', waco)
 
+    def test_el_paso_company_owned_service_record_is_searchable_and_unverified(self):
+        rows = DIRECTORY.search_static_companies(city='El Paso', state='TX')
+        moy = next(row for row in rows if row['company'] == 'Moy Construction & Remodeling')
+        self.assertEqual(moy['matched_service_area'], 'El Paso')
+        self.assertEqual(moy['matched_service_state'], 'TX')
+        self.assertEqual(moy['public_status'], 'unverified')
+        self.assertEqual(moy['display_status'], 'UNVERIFIED')
+
     def test_harkys_florida_locations_do_not_cross_match_texas(self):
         tampa = DIRECTORY.search_static_companies(city='Tampa', state='FL')
         self.assertIn("Harky's Chimney & Home Services",[row['company'] for row in tampa])
