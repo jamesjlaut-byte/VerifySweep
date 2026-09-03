@@ -89,6 +89,11 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(rows[0]['company'],'Hill Country Air Duct And Chimney Sweeps LLC')
         self.assertEqual(rows[0]['match_reason'],'Exact company match')
 
+    def test_database_company_path_uses_same_trust_sort_function(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn('rows.sort(key=company_trust_key)',source)
+        self.assertIn('fallback_by_key={company_key(item):item for item in fallback}',source)
+
     def test_founder_affiliated_company_has_no_special_status_or_rank(self):
         rows=directory.search_static_companies(state='TX')
         hill=next(row for row in rows if row['company']=='Hill Country Air Duct And Chimney Sweeps LLC')

@@ -649,10 +649,19 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
                     item['reviewed_professionals']=[person for person in item['reviewed_professionals'] if (not issuer or person['issuer'].lower()==issuer.lower()) and (not credential_type or person['credential'].lower()==credential_type.lower())]
                 item['reviewed_professional_names']=sorted(set(person['holder'] for person in item['reviewed_professionals']),key=str.lower)
                 item['verified_professional_count']=len(item['reviewed_professional_names'])
+                item['verified_affiliation_count']=sum(1 for person in item['reviewed_professionals'] if person.get('company_affiliation_status')=='VERIFIED')
+                item['company_identity_status']='UNKNOWN';item['contact_consistency_status']='NOT REVIEWED';item['profile_claim_status']=clean(item.get('claim_status'),60).upper() or 'UNCLAIMED'
                 if not (issuer or credential_type) or item['reviewed_professionals']:rows.append(item)
+            fallback_by_key={company_key(item):item for item in fallback}
+            for item in rows:
+                matched=fallback_by_key.get(company_key(item),{})
+                for field in ('match_rank','match_reason','matched_service_area','matched_service_state','distance'):
+                    if matched.get(field) is not None:item[field]=matched[field]
+                if item.get('match_rank') is None:item['match_rank']=8;item['match_reason']='Directory match'
+                add_ranking_explanation(item)
             seen={company_key(item) for item in rows}
             rows.extend(item for item in fallback if company_key(item) not in seen)
-            rows.sort(key=lambda item:clean(item.get('company'),200).lower())
+            rows.sort(key=company_trust_key)
             return rows,True
     finally:conn.close()
 
