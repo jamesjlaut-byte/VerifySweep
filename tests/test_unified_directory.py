@@ -203,6 +203,24 @@ class UnifiedDirectoryTests(unittest.TestCase):
         credentials=[person['credential'] for person in rows[0]['reviewed_professionals'] if person['holder']=='Paul Robison']
         self.assertEqual(credentials,['Accredited Certified Chimney Journeyman','Master Chimney Professional'])
 
+    def test_professional_detail_groups_credentials_for_one_named_person(self):
+        detail=directory.detail_static('ncsg-paul-robison-journeyman')
+        self.assertEqual(detail['holder'],'Paul Robison')
+        self.assertEqual(
+            {credential['credential'] for credential in detail['credentials']},
+            {'Accredited Certified Chimney Journeyman','Master Chimney Professional'}
+        )
+        longest=directory.detail_static('ncsg-scott-imgarten-honorary-master')
+        self.assertEqual(longest['holder'],'Scott Imgarten')
+
+    def test_search_and_profile_pages_link_to_named_professionals(self):
+        search=(ROOT/'find-a-pro.html').read_text()
+        profile=(ROOT/'professional-profile.html').read_text()
+        self.assertIn("'View Professional'",search)
+        self.assertIn("/professional-profile.html?id=",search)
+        self.assertIn("^[A-Za-z0-9_-]{1,80}$",profile)
+        self.assertIn("'VERIFY WITH ISSUER'",profile)
+
     def test_known_company_alias_attaches_named_credentials_to_service_area_record(self):
         rows=directory.search_static_companies(q='Lee Roff',verified_only=True)
         self.assertEqual(len(rows),1)

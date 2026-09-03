@@ -215,7 +215,17 @@ def search_static(zipcode,q='',radius=25):
 def detail_static(identifier):
     for source in static_records():
         if str(source.get('id'))==str(identifier):
-            item=dict(source);item['distance']=None;item['display_status'],item['status_note']=static_status(item);return item
+            item=dict(source);item['distance']=None;item['display_status'],item['status_note']=static_status(item)
+            credentials=[]
+            for candidate in static_records():
+                same_person=clean(candidate.get('holder'),200).lower()==clean(item.get('holder'),200).lower()
+                same_company=clean(candidate.get('company'),200).lower()==clean(item.get('company'),200).lower()
+                same_state=clean(candidate.get('state'),40).lower()==clean(item.get('state'),40).lower()
+                if not (same_person and same_company and same_state):continue
+                credential={k:candidate.get(k) for k in ('id','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note')}
+                credential['display_status'],credential['status_note']=static_status(candidate);credentials.append(credential)
+            item['credentials']=sorted(credentials,key=lambda value:(clean(value.get('issuer'),100),clean(value.get('credential_type') or value.get('credential'),200)))
+            return item
     return None
 
 def ensure(conn):
@@ -531,7 +541,9 @@ def detail_db(identifier):
               FROM pro_directory WHERE id=%s AND status=%s''',(identifier,PUBLISHED_STATUS));raw=cur.fetchone()
             if not raw:return detail_static(identifier)
             keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','distance']
-            item=rowdict(keys,raw);item['display_status'],item['status_note']=status_for(item);return item
+            item=rowdict(keys,raw);item['display_status'],item['status_note']=status_for(item)
+            item['credentials']=[{k:item.get(k) for k in ('id','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note','display_status','status_note')}]
+            return item
     finally:conn.close()
 
 def submit_db(p):
@@ -581,10 +593,10 @@ class handler(BaseHTTPRequestHandler):
                   'coverage_notice':'Directory coverage varies by location and is not comprehensive. Missing results do not establish that no qualified professional serves an area.',
                   'note':'UNVERIFIED means VerifySweep has not completed verification. It does not indicate fraud, misconduct, incompetence, or wrongdoing.'})
             if view!='professionals':return self.sendj(400,{'error':'Choose a supported directory view.'})
-            identifier=clean((qs.get('id') or [''])[0],30)
+            identifier=clean((qs.get('id') or [''])[0],80)
             if identifier:
                 if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',identifier):return self.sendj(400,{'error':'Invalid professional record.'})
-                result=detail_db(int(identifier) if identifier.isdigit() else identifier);return self.sendj(200 if result else 404,{'result':result} if result else {'error':'Professional record not found.'})
+                result=detail_db(int(identifier)) if identifier.isdigit() else detail_static(identifier);return self.sendj(200 if result else 404,{'result':result} if result else {'error':'Professional record not found.'})
             z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120)
             try:radius=int((qs.get('radius') or ['25'])[0])
             except:radius=25
