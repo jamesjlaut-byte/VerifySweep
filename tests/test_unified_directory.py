@@ -114,6 +114,17 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in ncsg))
         self.assertTrue(all(row['source']=='https://ncsg.org/find-a-sweep/find-a-certified-sweep' for row in ncsg))
 
+    def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
+        records=directory.static_records()
+        csia=[row for row in records if row.get('issuer')=='CSIA']
+        self.assertGreaterEqual(len(csia),9)
+        self.assertTrue(all(row['holder'] and row['company'] for row in csia))
+        self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
+        self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
+        self.assertTrue(all(row['source'].startswith('https://web.csia.org/CSIA-Certified/') for row in csia))
+        self.assertTrue(all('/Texas' not in row['source'] for row in csia))
+        self.assertTrue({'Layton Mitten','Sahar Mazoz','Lee Roff','Jack Wachsmann','Santiago Ramirez Jr.'}.issubset({row['holder'] for row in csia}))
+
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
         self.assertEqual(len(rows),1)
@@ -130,6 +141,13 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         credentials=[person['credential'] for person in rows[0]['reviewed_professionals'] if person['holder']=='Paul Robison']
         self.assertEqual(credentials,['Accredited Certified Chimney Journeyman','Master Chimney Professional'])
+
+    def test_known_company_alias_attaches_named_credentials_to_service_area_record(self):
+        rows=directory.search_static_companies(q='Lee Roff',verified_only=True)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['company'],'Lords Chimney')
+        self.assertIn('Houston, TX',rows[0]['service_area_labels'])
+        self.assertEqual({person['issuer'] for person in rows[0]['reviewed_professionals']},{'CSIA','NCSG'})
 
     def test_company_search_filters_by_issuer_and_exact_credential_type(self):
         masters=directory.search_static_companies(issuer='NCSG',credential_type='Master Chimney Professional')

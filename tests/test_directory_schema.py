@@ -118,7 +118,7 @@ class DirectorySchemaTests(unittest.TestCase):
     def test_company_professionals_remain_named_individual_records(self):
         company = DIRECTORY.search_static_companies(q='Wolfman')[0]
         rows = DIRECTORY.company_professionals(company)
-        self.assertEqual(len(rows), 2)
+        self.assertEqual({row['holder'] for row in rows}, {'Bill Reynolds', 'Jason Trevino', 'Jack Wachsmann'})
         self.assertTrue(all(row.get('holder') for row in rows))
         self.assertTrue(all(row['display_status'] == 'VERIFIED FROM OFFICIAL SOURCE' for row in rows))
         self.assertEqual(company['display_status'], 'UNVERIFIED')
@@ -163,7 +163,10 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(wolfman['city'], 'New Braunfels')
         self.assertEqual(wolfman['matched_service_area'], 'Austin')
         self.assertIn('Bastrop', wolfman['service_areas'])
-        self.assertEqual(len(DIRECTORY.company_professionals(wolfman)), 2)
+        self.assertEqual(
+            {row['holder'] for row in DIRECTORY.company_professionals(wolfman)},
+            {'Bill Reynolds', 'Jason Trevino', 'Jack Wachsmann'},
+        )
 
     def test_top_hat_and_ables_are_searchable_across_published_areas(self):
         hutto = DIRECTORY.search_static_companies(city='Hutto', state='TX')
