@@ -83,6 +83,13 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(hill['public_status'],'unverified')
         self.assertNotEqual(rows[0]['company'],'Hill Country Air Duct And Chimney Sweeps LLC')
 
+    def test_company_trust_facts_default_to_neutral_states(self):
+        company=directory.search_static_companies(q='Hill Country Air Duct And Chimney Sweeps LLC')[0]
+        self.assertEqual(company['company_identity_status'],'UNKNOWN')
+        self.assertEqual(company['contact_consistency_status'],'NOT REVIEWED')
+        self.assertEqual(company['profile_claim_status'],'UNCLAIMED')
+        self.assertEqual(company['verified_affiliation_count'],0)
+
     def test_reviewed_professional_name_search_uses_reviewed_records(self):
         rows=directory.search_static_companies(q='Pete Pohlman')
         self.assertEqual(rows[0]['company'],'Black Velvet Chimney')
@@ -237,6 +244,9 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('mailto:info@verifysweep.com',profile)
         self.assertIn("'View Professional'",company)
         self.assertIn("'REPORT A PROBLEM'",company)
+        self.assertIn('COMPANY TRUST FACTS',company)
+        self.assertIn('Verified professional affiliations',company)
+        self.assertIn('Company affiliation:',company)
 
     def test_professional_detail_does_not_infer_identity_or_affiliation(self):
         detail=directory.detail_static('ncsg-paul-robison-journeyman')

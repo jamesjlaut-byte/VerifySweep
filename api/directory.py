@@ -510,6 +510,9 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'id':clean(source.get('id'),160) or 'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
           'company':company,'website':clean(source.get('website'),1000),'phone':clean(source.get('phone'),80),
           'city':company_city,'state':company_state,'zip':company_zip,'public_status':clean(source.get('public_status'),60).lower() or 'unverified','claim_status':'unclaimed',
+          'company_identity_status':clean(source.get('company_identity_status'),60).upper() or 'UNKNOWN',
+          'contact_consistency_status':clean(source.get('contact_consistency_status'),60).upper() or 'NOT REVIEWED',
+          'profile_claim_status':clean(source.get('profile_claim_status'),60).upper() or 'UNCLAIMED',
           'last_reviewed_at':clean(source.get('last_checked_at') or source.get('captured_at'),40) or None,'verification_due_at':None,
           'source_type':clean(source.get('source_type'),80) or 'directory_research_record','source_url':clean(source.get('source_url') or source.get('source') or next((v.get('url') for v in source.get('sources') or [] if isinstance(v,dict) and v.get('url')),''),1000),
           'service_areas':service_areas,'service_locations':service_locations,'service_area_labels':[location['city']+', '+location['state'] if location['state'] else location['city'] for location in service_locations],
@@ -518,7 +521,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'display_status':company_status_label(source.get('public_status') or 'unverified'),
           'company_claims':source.get('company_claims') or [],'professional_candidates':source.get('professional_candidates') or [],
           'sources':source.get('sources') or [],'reviewed_professional_names':reviewed_people,'reviewed_professionals':reviewed_professionals,
-          'verified_professional_count':len(reviewed_people),'verification_scope':clean(source.get('verification_scope'),120),
+          'verified_professional_count':len(reviewed_people),'verified_affiliation_count':sum(1 for person in reviewed_professionals if person.get('company_affiliation_status')=='VERIFIED'),'verification_scope':clean(source.get('verification_scope'),120),
           'verification_note':clean(source.get('verification_note'),600)
         })
         if distance is not None and (item.get('distance') is None or distance<item['distance']):item['distance']=round(distance,1)
@@ -549,6 +552,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
             item['verified_professional_count']=len(item['reviewed_professional_names'])
             combined={person['id'] or '|'.join((person['holder'],person['credential'],person['issuer'])):person for person in [*(item.get('reviewed_professionals') or []),*reviewed_professionals]}
             item['reviewed_professionals']=sorted(combined.values(),key=lambda person:(person['holder'].lower(),person['credential'].lower()))
+            item['verified_affiliation_count']=sum(1 for person in item['reviewed_professionals'] if person.get('company_affiliation_status')=='VERIFIED')
         matched=next((location for location in service_locations if location['city'].lower()==city_needle and (not state_needle or location['state'].lower()==state_needle)),None) if city_needle else None
         if matched:item['matched_service_area']=matched['city'];item['matched_service_state']=matched['state']
         exact_company=bool(needle) and needle==company.lower()
