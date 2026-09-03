@@ -128,6 +128,22 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(rows[0]['reviewed_professional_names'],['Pete Pohlman'])
         self.assertEqual(rows[0]['verified_professional_count'],1)
 
+    def test_industry_leader_candidate_is_not_published_before_evidence_gate(self):
+        pete=directory.detail_static('fire-pete-pohlman')
+        self.assertIsNone(pete['industry_leader'])
+        self.assertNotIn('industry_leader_review_private',pete)
+        company=directory.search_static_companies(q='Pete Pohlman')[0]
+        self.assertIsNone(company['reviewed_professionals'][0]['industry_leader'])
+
+    def test_industry_leader_requires_two_verified_records_and_contribution_source(self):
+        first={'id':'credential-a','holder':'Test Leader','company':'Test Sweep','credential':'Credential A','issuer':'Issuer A','verification_status':'verified_from_official_source','verified_at':'2026-09-01T00:00:00Z','recheck_due_at':'2027-01-01T00:00:00Z'}
+        second={**first,'id':'credential-b','credential':'Credential B','issuer':'Issuer B'}
+        first['industry_leader_review_private']={'status':'approved','verified_credential_record_ids':['credential-a','credential-b'],'contribution_evidence_url':'https://example.org/contribution','contribution_summary':'Documented contribution.'}
+        with patch.object(directory,'static_records',return_value=[first,second]):
+            recognition=directory.industry_leader_for(first)
+        self.assertEqual(recognition['title'],'VerifySweep Industry Leader')
+        self.assertEqual(recognition['contribution_summary'],'Documented contribution.')
+
     def test_reviewed_individual_filter_does_not_promote_company_claims(self):
         rows=directory.search_static_companies(verified_only=True)
         self.assertTrue({

@@ -400,6 +400,7 @@ def detail_static(identifier):
                 credential={k:candidate.get(k) for k in ('id','credential','credential_type','credential_number','issuer','source','issued_date','expiration_date','verified_at','last_checked_at','recheck_due_at','source_available','source_note','self_reported')}
                 credential['display_status'],credential['status_note']=static_status(candidate);credentials.append(credential)
             item['credentials']=sorted(credentials,key=lambda value:(clean(value.get('issuer'),100),clean(value.get('credential_type') or value.get('credential'),200)))
+            item['industry_leader']=industry_leader_for(item)
             return public_directory_record(item)
     return None
 
@@ -507,10 +508,32 @@ def reviewed_professionals_for_company(company,city,state,zipcode):
               'last_checked_at':clean(person.get('last_checked_at'),40),'recheck_due_at':clean(person.get('recheck_due_at'),40),
               'identity_status':clean(person.get('identity_status'),60).upper() or 'UNKNOWN',
               'company_affiliation_status':clean(person.get('company_affiliation_status'),60).upper() or 'UNKNOWN',
-              'display_status':label,'status_note':note
+              'display_status':label,'status_note':note,
+              'industry_leader':industry_leader_for(person)
             })
     unique={person['id'] or '|'.join((person['holder'],person['credential'],person['issuer'])):person for person in people if person['holder']}
     return sorted(unique.values(),key=lambda person:(person['holder'].lower(),person['credential'].lower()))
+
+def industry_leader_for(person):
+    """Return only fully approved editorial recognition; never expose review candidates."""
+    review=person.get('industry_leader_review_private') or person.get('industry_leader_review')
+    if not isinstance(review,dict) or clean(review.get('status'),40).lower()!='approved':return None
+    credential_ids={str(value) for value in review.get('verified_credential_record_ids') or []}
+    holder=clean(person.get('holder'),200).lower();company=clean(person.get('company'),200).lower()
+    verified_records=[record for record in static_records() if str(record.get('id')) in credential_ids and static_status(record)[0]=='CREDENTIAL VERIFIED' and clean(record.get('holder'),200).lower()==holder and clean(record.get('company'),200).lower()==company]
+    distinct_credentials={(clean(record.get('issuer'),100).lower(),clean(record.get('credential_type') or record.get('credential'),200).lower()) for record in verified_records}
+    if len(distinct_credentials)<2:return None
+    contribution_url=clean(review.get('contribution_evidence_url'),1000)
+    if not contribution_url:return None
+    return {
+      'title':'VerifySweep Industry Leader',
+      'criteria_version':clean(review.get('criteria_version'),40),
+      'awarded_at':clean(review.get('awarded_at'),40),
+      'review_due_at':clean(review.get('review_due_at'),40),
+      'contribution_summary':clean(review.get('contribution_summary'),500),
+      'contribution_evidence_url':contribution_url,
+      'criteria_url':'https://www.verifysweep.com/industry-leader-standard.html'
+    }
 
 def reviewed_people_for_company(company,city,state,zipcode):
     return sorted(set(person['holder'] for person in reviewed_professionals_for_company(company,city,state,zipcode)),key=str.lower)

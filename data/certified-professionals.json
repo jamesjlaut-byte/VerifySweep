@@ -21,7 +21,16 @@
       "last_checked_at": "2026-09-02T18:00:00Z",
       "recheck_due_at": "2026-12-02T18:00:00Z",
       "source_available": true,
-      "source_note": "Pete Pohlman and Black Velvet Chimney are shown in Mansfield on the linked official F.I.R.E. Texas certified inspectors and technicians directory."
+      "source_note": "Pete Pohlman and Black Velvet Chimney are shown in Mansfield on the linked official F.I.R.E. Texas certified inspectors and technicians directory.",
+      "industry_leader_review_private": {
+        "status": "evidence_review",
+        "title": "VerifySweep Industry Leader",
+        "criteria_version": "2026-09-03",
+        "verified_credential_record_ids": ["fire-pete-pohlman"],
+        "additional_credential_evidence_url": "https://www.bvchimney.com/about/qualificationstraining/",
+        "contribution_evidence_url": "",
+        "review_note": "Pete is the first requested candidate. The public badge remains gated until a second current credential is independently verified and a public source documents an industry contribution. Company-published certification history is retained as supporting evidence, not treated as independent verification."
+      }
     },
     {
       "id": 18867,
