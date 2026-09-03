@@ -97,11 +97,19 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_ncsg_records_are_named_current_source_credentials(self):
         records=directory.static_records()
         ncsg=[row for row in records if row.get('issuer')=='NCSG']
-        self.assertGreaterEqual(len(ncsg),20)
+        self.assertGreaterEqual(len(ncsg),30)
         self.assertTrue(all(row['holder'] and row['company'] for row in ncsg))
         self.assertTrue(all(row['credential']=='Accredited Certified Chimney Professional' for row in ncsg))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in ncsg))
         self.assertTrue(all(row['source']=='https://ncsg.org/find-a-sweep/find-a-certified-sweep' for row in ncsg))
+
+    def test_reviewed_professional_links_to_same_state_canonical_company(self):
+        rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]['company'], "Bailey's Chimney, LLC")
+        self.assertEqual(rows[0]['reviewed_professional_names'], ['Matthew Mirabal'])
+        detail,_=directory.detail_company(rows[0]['id'])
+        self.assertEqual([person['holder'] for person in detail['professionals']], ['Matthew Mirabal'])
 
 
 if __name__=='__main__':unittest.main()

@@ -307,7 +307,8 @@ def reviewed_people_for_company(company,city,state,zipcode):
         if clean(person.get('company'),200).lower()!=company.lower():continue
         same_zip=bool(zipcode) and clean(person.get('zip'),5)==zipcode
         same_place=clean(person.get('city'),120).lower()==city.lower() and clean(person.get('state'),40).lower()==state.lower()
-        if same_zip or same_place:
+        same_state=bool(state) and clean(person.get('state'),40).lower()==state.lower()
+        if same_zip or same_place or same_state:
             people.append(clean(person.get('holder'),200))
     return sorted(set(value for value in people if value),key=str.lower)
 
@@ -317,7 +318,8 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
     known={(clean(x.get('company'),200).lower(),clean(x.get('zip') or x.get('postal_code'),5),clean(x.get('city') or x.get('hq_city'),120).lower(),clean(x.get('state') or x.get('hq_state'),40).lower()) for x in company_sources}
     for person in static_records():
         identity=(clean(person.get('company'),200).lower(),clean(person.get('zip'),5),clean(person.get('city'),120).lower(),clean(person.get('state'),40).lower())
-        if identity not in known:company_sources.append(person);known.add(identity)
+        same_company_state=any(existing[0]==identity[0] and existing[3] and existing[3]==identity[3] for existing in known)
+        if identity not in known and not same_company_state:company_sources.append(person);known.add(identity)
     for source in company_sources:
         company=clean(source.get('company'),200);company_city=clean(source.get('city') or source.get('hq_city'),120);company_state=clean(source.get('state') or source.get('hq_state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
         if clean(source.get('id'),160).startswith('national-') and not (source.get('website') or source.get('sources')):continue
@@ -401,7 +403,8 @@ def company_professionals(company):
     rows=[]
     for source in static_records():
         same_name=clean(source.get('company'),200).lower()==clean(company.get('company'),200).lower()
-        same_location=clean(source.get('zip'),5)==clean(company.get('zip'),5) or (clean(source.get('city'),120).lower()==clean(company.get('city'),120).lower() and clean(source.get('state'),40).lower()==clean(company.get('state'),40).lower())
+        source_zip=clean(source.get('zip'),5);company_zip=clean(company.get('zip'),5)
+        same_location=(bool(source_zip) and source_zip==company_zip) or (clean(source.get('city'),120).lower()==clean(company.get('city'),120).lower() and clean(source.get('state'),40).lower()==clean(company.get('state'),40).lower()) or (bool(clean(company.get('state'),40)) and clean(source.get('state'),40).lower()==clean(company.get('state'),40).lower())
         if not (same_name and same_location):continue
         item={k:source.get(k) for k in ('id','holder','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available')}
         item['display_status'],item['status_note']=static_status(source);rows.append(item)
