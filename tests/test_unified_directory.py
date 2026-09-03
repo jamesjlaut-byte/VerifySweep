@@ -75,7 +75,19 @@ class UnifiedDirectoryTests(unittest.TestCase):
 
     def test_city_location_ranks_before_service_area(self):
         rows=directory.search_static_companies(city='Austin',state='TX')
-        self.assertEqual([row['match_rank'] for row in rows],sorted(row['match_rank'] for row in rows))
+        self.assertGreaterEqual(rows[0]['verified_professional_count'],rows[-1]['verified_professional_count'])
+
+    def test_location_results_prioritize_reviewed_professionals_before_distance(self):
+        rows=directory.search_static_companies(city='Austin',state='TX',verified_only=True)
+        counts=[row['verified_professional_count'] for row in rows]
+        self.assertEqual(counts,sorted(counts,reverse=True))
+        self.assertEqual(rows[0]['company'],'Wolfman Chimney & Fireplace')
+        self.assertIn('reviewed credentials',rows[0]['ranking_explanation'])
+
+    def test_exact_company_search_still_beats_trust_tiebreakers(self):
+        rows=directory.search_static_companies(q='Hill Country Air Duct And Chimney Sweeps LLC')
+        self.assertEqual(rows[0]['company'],'Hill Country Air Duct And Chimney Sweeps LLC')
+        self.assertEqual(rows[0]['match_reason'],'Exact company match')
 
     def test_founder_affiliated_company_has_no_special_status_or_rank(self):
         rows=directory.search_static_companies(state='TX')

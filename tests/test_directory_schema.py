@@ -198,8 +198,14 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertNotIn('Wolfman Chimney & Fireplace', {row['company'] for row in ten_miles})
         wolfman = next(row for row in fifty_miles if row['company'] == 'Wolfman Chimney & Fireplace')
         self.assertLessEqual(wolfman['distance'], 50)
-        distances = [row['distance'] for row in fifty_miles if row.get('distance') is not None]
-        self.assertEqual(distances, sorted(distances))
+        self.assertTrue(all(row['distance'] <= 50 for row in fifty_miles if row.get('distance') is not None))
+        tiers = {}
+        for row in fifty_miles:
+            if row.get('distance') is None:
+                continue
+            tier = (row.get('verified_affiliation_count', 0), row.get('verified_professional_count', 0), row.get('match_rank'))
+            tiers.setdefault(tier, []).append(row['distance'])
+        self.assertTrue(all(values == sorted(values) for values in tiers.values()))
 
     def test_black_velvet_service_area_and_named_credential_stay_separate(self):
         rows = DIRECTORY.search_static_companies(city='Fort Worth', state='TX')

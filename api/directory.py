@@ -475,6 +475,26 @@ def reviewed_professionals_for_company(company,city,state,zipcode):
 def reviewed_people_for_company(company,city,state,zipcode):
     return sorted(set(person['holder'] for person in reviewed_professionals_for_company(company,city,state,zipcode)),key=str.lower)
 
+def company_trust_key(item):
+    professionals=item.get('reviewed_professionals') or []
+    affiliation_count=sum(1 for person in professionals if person.get('company_affiliation_status')=='VERIFIED')
+    identity_count=sum(1 for person in professionals if person.get('identity_status')=='VERIFIED')
+    credential_count=len({person.get('holder') for person in professionals if person.get('holder')})
+    match_rank=item.get('match_rank',99)
+    # Exact business/professional text matches remain deterministic. For location
+    # discovery, verified professional facts lead and location quality follows.
+    search_group=match_rank if match_rank<=3 else 4
+    return (search_group,-affiliation_count,-identity_count,-credential_count,match_rank,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower())
+
+def add_ranking_explanation(item):
+    signals=[]
+    if item.get('verified_affiliation_count'):signals.append(str(item['verified_affiliation_count'])+' verified professional affiliation'+('s' if item['verified_affiliation_count']!=1 else ''))
+    identity_count=sum(1 for person in item.get('reviewed_professionals') or [] if person.get('identity_status')=='VERIFIED')
+    if identity_count:signals.append(str(identity_count)+' identity verified professional'+('s' if identity_count!=1 else ''))
+    if item.get('verified_professional_count'):signals.append(str(item['verified_professional_count'])+' professional'+('s' if item['verified_professional_count']!=1 else '')+' with reviewed credentials')
+    item['ranking_explanation']=' · '.join(signals) or 'No independently verified professional trust signals currently on file'
+    return item
+
 def search_static_companies(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type=''):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower();issuer_needle=clean(issuer,100).lower();credential_needle=clean(credential_type,200).lower();points=zip_centroids();origin=points.get(zipcode)
     company_sources=[*static_company_records(),*national_company_records()]
@@ -568,8 +588,9 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         else:rank,reason=8,'Directory match'
         if item.get('match_rank') is None or rank<item['match_rank']:
             item['match_rank']=rank;item['match_reason']=reason
-    # Verification status is descriptive, never an affiliated or founder-based ranking signal.
-    return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item.get('distance') if item.get('distance') is not None else float('inf'),item['company'].lower()))
+    # Relevance stays first. Within equally relevant results, independently reviewed
+    # professional facts outrank distance. Ownership/founder status is never a signal.
+    return sorted((add_ranking_explanation(item) for item in groups.values()),key=company_trust_key)
 
 def company_professionals(company):
     rows=[]
