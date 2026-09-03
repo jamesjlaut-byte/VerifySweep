@@ -117,7 +117,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),74)
+        self.assertGreaterEqual(len(csia),81)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
@@ -178,6 +178,13 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(set(leonard['reviewed_professional_names']),{'Malik Cox','Evan Vining','Caleb Martinez'})
         authority=next(row for row in illinois if row['company']=='Fireplace and Chimney Authority, Inc.')
         self.assertEqual(set(authority['reviewed_professional_names']),{'Mike Strickland','Daniel Colon','Rocky Insixiengmay'})
+
+    def test_michigan_csia_professionals_are_named_and_grouped(self):
+        michigan=directory.search_static_companies(state='MI',issuer='CSIA',verified_only=True)
+        names={name for row in michigan for name in row['reviewed_professional_names']}
+        self.assertTrue({'Nathan Adair','Richard Lane','Tim Reiher','Chase Czymbor','William Castle','Tyler Bogard','Charles Weber'}.issubset(names))
+        alpha=next(row for row in michigan if row['company']=='Alpha & Omega Services LLC')
+        self.assertEqual(set(alpha['reviewed_professional_names']),{'Nathan Adair','Chase Czymbor','William Castle','Tyler Bogard'})
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
