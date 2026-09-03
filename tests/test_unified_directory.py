@@ -117,7 +117,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),67)
+        self.assertGreaterEqual(len(csia),74)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
@@ -174,6 +174,10 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(set(vertical['reviewed_professional_names']),{'James Duda','Danny Edmonds'})
         doctor=directory.search_static_companies(q='Todd Dosemagen',state='IL',issuer='CSIA',verified_only=True)
         self.assertEqual([(row['company'],row['state']) for row in doctor],[('The Chimney Doctor','IL')])
+        leonard=next(row for row in illinois if row['company']=='Leonard & Sons Building Service Inc.')
+        self.assertEqual(set(leonard['reviewed_professional_names']),{'Malik Cox','Evan Vining','Caleb Martinez'})
+        authority=next(row for row in illinois if row['company']=='Fireplace and Chimney Authority, Inc.')
+        self.assertEqual(set(authority['reviewed_professional_names']),{'Mike Strickland','Daniel Colon','Rocky Insixiengmay'})
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
