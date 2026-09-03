@@ -111,6 +111,9 @@ NORMALIZED_DIRECTORY_SCHEMA=(
     review_status TEXT NOT NULL DEFAULT 'pending' CHECK (review_status IN ('pending','needs_evidence','approved','rejected','withdrawn')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )''',
+  'ALTER TABLE directory_profile_claim_requests ADD COLUMN IF NOT EXISTS reviewed_by TEXT',
+  'ALTER TABLE directory_profile_claim_requests ADD COLUMN IF NOT EXISTS review_note TEXT',
+  'ALTER TABLE directory_profile_claim_requests ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ',
   '''CREATE TABLE IF NOT EXISTS directory_legacy_migration_map (
     id BIGSERIAL PRIMARY KEY, legacy_table TEXT NOT NULL DEFAULT 'pro_directory', legacy_record_id BIGINT NOT NULL,
     professional_id BIGINT REFERENCES directory_professionals(id) ON DELETE SET NULL,
@@ -406,6 +409,9 @@ def ensure(conn):
           "ADD COLUMN IF NOT EXISTS expiration_date DATE",
           "ADD COLUMN IF NOT EXISTS submitter_email_private TEXT",
           "ADD COLUMN IF NOT EXISTS submission_notes_private TEXT",
+          "ADD COLUMN IF NOT EXISTS reviewed_by TEXT",
+          "ADD COLUMN IF NOT EXISTS review_note TEXT",
+          "ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ",
           "ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'verification_needed'",
           "ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ",
           "ADD COLUMN IF NOT EXISTS source_last_checked_at TIMESTAMPTZ",
@@ -810,16 +816,16 @@ def submit_db(p):
         conn.commit();return rid
     finally:conn.close()
 
-def list_pending_submissions_db():
+def list_pending_submissions_db(status='pending'):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
     try:
         ensure(conn)
         with conn.cursor() as cur:
             cur.execute('''SELECT id,company,professional_name,credential,credential_type,credential_number,expiration_date,issuer,
-              credential_source,city,state,postal_code,website,phone,submitter_email_private,submission_notes_private,created_at
-              FROM pro_directory WHERE status='pending' ORDER BY created_at ASC LIMIT 250''')
-            keys=['id','company','professional_name','credential','credential_type','credential_number','expiration_date','issuer','credential_source','city','state','postal_code','website','phone','submitter_email_private','submission_notes_private','created_at']
+              credential_source,city,state,postal_code,website,phone,submitter_email_private,submission_notes_private,status,created_at,reviewed_by,review_note,reviewed_at
+              FROM pro_directory WHERE status=%s ORDER BY created_at ASC LIMIT 250''',(status,))
+            keys=['id','company','professional_name','credential','credential_type','credential_number','expiration_date','issuer','credential_source','city','state','postal_code','website','phone','submitter_email_private','submission_notes_private','status','created_at','reviewed_by','review_note','reviewed_at']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
@@ -854,9 +860,9 @@ def list_profile_claims_db(status='pending'):
     try:
         ensure(conn)
         with conn.cursor() as cur:
-            cur.execute('''SELECT id,target_type,target_id,claimant_name,claimant_email_private,business_phone_private,evidence_url_private,details,review_status,created_at,updated_at
+            cur.execute('''SELECT id,target_type,target_id,claimant_name,claimant_email_private,business_phone_private,evidence_url_private,details,review_status,created_at,updated_at,reviewed_by,review_note,reviewed_at
               FROM directory_profile_claim_requests WHERE review_status=%s ORDER BY created_at ASC LIMIT 200''',(status,))
-            keys=['id','target_type','target_id','claimant_name','claimant_email_private','business_phone_private','evidence_url_private','details','review_status','created_at','updated_at']
+            keys=['id','target_type','target_id','claimant_name','claimant_email_private','business_phone_private','evidence_url_private','details','review_status','created_at','updated_at','reviewed_by','review_note','reviewed_at']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
@@ -910,6 +916,36 @@ def list_reverification_queue_db():
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
+def review_profile_claim_db(claim_id,status,reviewer,note):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('SELECT review_status,target_type,target_id FROM directory_profile_claim_requests WHERE id=%s FOR UPDATE',(claim_id,));row=cur.fetchone()
+            if not row:raise ValueError('Claim request not found.')
+            old_status,target_type,target_id=row
+            cur.execute('''UPDATE directory_profile_claim_requests SET review_status=%s,reviewed_by=%s,review_note=%s,reviewed_at=now(),updated_at=now() WHERE id=%s''',(status,reviewer,note,claim_id))
+            cur.execute('''INSERT INTO directory_audit_log(actor_id,action,target_type,target_id,old_value,new_value,reason)
+              VALUES(%s,'review_profile_claim',%s,%s,%s::jsonb,%s::jsonb,%s)''',(reviewer,target_type,target_id,json.dumps({'review_status':old_status}),json.dumps({'review_status':status,'verification_changed':False}),note))
+        conn.commit();return {'id':claim_id,'review_status':status,'verification_changed':False}
+    finally:conn.close()
+
+def review_credential_submission_db(submission_id,status,reviewer,note):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('SELECT status FROM pro_directory WHERE id=%s FOR UPDATE',(submission_id,));row=cur.fetchone()
+            if not row:raise ValueError('Credential submission not found.')
+            old_status=row[0]
+            cur.execute('''UPDATE pro_directory SET status=%s,reviewed_by=%s,review_note=%s,reviewed_at=now(),updated_at=now() WHERE id=%s''',(status,reviewer,note,submission_id))
+            cur.execute('''INSERT INTO directory_audit_log(actor_id,action,target_type,target_id,old_value,new_value,reason)
+              VALUES(%s,'review_credential_submission','credential_submission',%s,%s::jsonb,%s::jsonb,%s)''',(reviewer,str(submission_id),json.dumps({'status':old_status}),json.dumps({'status':status,'verification_status':'verification_needed'}),note))
+        conn.commit();return {'id':submission_id,'status':status,'verification_status':'verification_needed'}
+    finally:conn.close()
+
 def review_report_db(report_id,status,reviewer,note):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
@@ -944,7 +980,9 @@ class handler(BaseHTTPRequestHandler):
                 claims=list_profile_claims_db(status);return self.sendj(200,{'claims':claims,'count':len(claims),'status':status},include_private=True)
             if view=='admin_submissions':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
-                submissions=list_pending_submissions_db();return self.sendj(200,{'submissions':submissions,'count':len(submissions),'status':'pending'},include_private=True)
+                status=clean((qs.get('status') or ['pending'])[0],30)
+                if status not in ('pending','reviewing','needs_evidence','ready_for_verification','rejected','withdrawn'):return self.sendj(400,{'error':'Choose a valid submission status.'})
+                submissions=list_pending_submissions_db(status);return self.sendj(200,{'submissions':submissions,'count':len(submissions),'status':status},include_private=True)
             if view=='admin_reverification':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, or temporarily unverifiable credential records'})
@@ -1002,6 +1040,22 @@ class handler(BaseHTTPRequestHandler):
                 if clean(p.get('evidence_url')) and not valid_http_url(clean(p.get('evidence_url'),1000)):raise ValueError('Use a valid public evidence URL.')
                 if len(clean(p.get('details'),3000))<10:raise ValueError('Explain your connection to this profile.')
                 rid=submit_profile_claim_db(p);return self.sendj(201,{'id':rid,'status':'pending','message':'Claim request received for human review. Claiming a profile does not verify identity, affiliation, credentials, or the company.'})
+            if clean(p.get('action'),40)=='review_profile_claim':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                try:claim_id=int(p.get('claim_id'))
+                except (TypeError,ValueError):raise ValueError('Choose a valid claim request.')
+                status=clean(p.get('status'),30);note=clean(p.get('review_note'),1000);reviewer=clean(self.headers.get('X-VerifySweep-Reviewer'),120) or 'authorized-reviewer'
+                if status not in ('needs_evidence','approved','rejected','withdrawn'):raise ValueError('Choose a valid claim review status.')
+                if len(note)<5:raise ValueError('Add a review note for the audit trail.')
+                return self.sendj(200,review_profile_claim_db(claim_id,status,reviewer,note))
+            if clean(p.get('action'),40)=='review_credential_submission':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                try:submission_id=int(p.get('submission_id'))
+                except (TypeError,ValueError):raise ValueError('Choose a valid credential submission.')
+                status=clean(p.get('status'),30);note=clean(p.get('review_note'),1000);reviewer=clean(self.headers.get('X-VerifySweep-Reviewer'),120) or 'authorized-reviewer'
+                if status not in ('reviewing','needs_evidence','ready_for_verification','rejected','withdrawn'):raise ValueError('Choose a valid submission review status.')
+                if len(note)<5:raise ValueError('Add a review note for the audit trail.')
+                return self.sendj(200,review_credential_submission_db(submission_id,status,reviewer,note))
             if clean(p.get('action'),40)=='review_report':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 try:report_id=int(p.get('report_id'))

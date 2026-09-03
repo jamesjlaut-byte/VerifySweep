@@ -140,8 +140,19 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn('submitter_email_private TEXT',source)
         self.assertIn('submission_notes_private TEXT',source)
         self.assertIn("view=='admin_submissions'",source)
-        self.assertIn("WHERE status='pending'",source)
+        self.assertIn('FROM pro_directory WHERE status=%s',source)
         self.assertIn('Administrative authorization required.',source)
+
+    def test_claim_and_submission_reviews_are_audited_without_verifying(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn("clean(p.get('action'),40)=='review_profile_claim'",source)
+        self.assertIn("'review_profile_claim'",source)
+        self.assertIn("'verification_changed':False",source)
+        self.assertIn("clean(p.get('action'),40)=='review_credential_submission'",source)
+        self.assertIn("'review_credential_submission'",source)
+        self.assertIn("'verification_status':'verification_needed'",source)
+        self.assertIn("'ready_for_verification'",source)
+        self.assertIn('reviewed_at TIMESTAMPTZ',source)
 
     def test_reverification_queue_is_private_and_covers_expiration_source_and_due_dates(self):
         source=(ROOT/'api'/'directory.py').read_text()
