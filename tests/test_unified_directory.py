@@ -58,5 +58,21 @@ class UnifiedDirectoryTests(unittest.TestCase):
             self.assertEqual(opened.call_args.args[0].full_url,'https://api.zippopotam.us/us/78701')
         self.assertIsNone(directory.resolve_us_zip('http://127.0.0.1'))
 
+    def test_every_state_and_dc_has_public_search_coverage(self):
+        states='AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC'.split()
+        self.assertEqual([], [state for state in states if not directory.search_static_companies(state=state)])
+
+    def test_exact_company_match_ranks_first(self):
+        rows=directory.search_static_companies(q='Hill Country Air Duct And Chimney Sweeps LLC')
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]['company'],'Hill Country Air Duct And Chimney Sweeps LLC')
+        self.assertEqual(rows[0]['match_reason'],'Exact company match')
+
+    def test_city_location_ranks_before_service_area(self):
+        rows=directory.search_static_companies(city='Austin',state='TX')
+        ranks=[row['match_rank'] for row in rows]
+        self.assertEqual(ranks,sorted(ranks))
+        self.assertEqual(rows[0]['match_reason'],'Business location match')
+
 
 if __name__=='__main__':unittest.main()

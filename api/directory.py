@@ -351,12 +351,19 @@ def search_static_companies(zipcode='',q='',city='',state=''):
                 item[field]=list(merged.values())
         matched=next((location for location in service_locations if location['city'].lower()==city_needle and (not state_needle or location['state'].lower()==state_needle)),None) if city_needle else None
         if matched:item['matched_service_area']=matched['city'];item['matched_service_state']=matched['state']
-        if needle and candidate_names and all(token in candidate_names.lower() for token in needle_tokens):item['match_reason']='Named professional research match'
-        elif matched:item['match_reason']='Published service area match'
-        elif city_needle and company_city.lower()==city_needle:item['match_reason']='Business location match'
-        elif needle:item['match_reason']='Company or directory information match'
-        else:item['match_reason']='Directory match'
-    return sorted(groups.values(),key=lambda item:item['company'].lower())
+        exact_company=bool(needle) and needle==company.lower()
+        starts_company=bool(needle) and company.lower().startswith(needle)
+        if exact_company:rank,reason=0,'Exact company match'
+        elif starts_company:rank,reason=1,'Company name match'
+        elif needle and candidate_names and all(token in candidate_names.lower() for token in needle_tokens):rank,reason=2,'Named professional research match'
+        elif city_needle and company_city.lower()==city_needle:rank,reason=3,'Business location match'
+        elif matched:rank,reason=4,'Published service area match'
+        elif state_needle and company_state.lower()==state_needle:rank,reason=5,'Business state match'
+        elif needle:rank,reason=6,'Company or directory information match'
+        else:rank,reason=7,'Directory match'
+        if item.get('match_rank') is None or rank<item['match_rank']:
+            item['match_rank']=rank;item['match_reason']=reason
+    return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item['company'].lower()))
 
 def company_professionals(company):
     rows=[]
@@ -507,6 +514,7 @@ class handler(BaseHTTPRequestHandler):
                     connected=connected or nearby_connected
                 return self.sendj(200,{'results':results,'count':len(results),'database_connected':connected,'public_business_fields_only':True,
                   'resolved_location':resolved,
+                  'coverage_notice':'Directory coverage varies by location and is not comprehensive. Missing results do not establish that no qualified professional serves an area.',
                   'note':'UNVERIFIED means VerifySweep has not completed verification. It does not indicate fraud, misconduct, incompetence, or wrongdoing.'})
             if view!='professionals':return self.sendj(400,{'error':'Choose a supported directory view.'})
             identifier=clean((qs.get('id') or [''])[0],30)
