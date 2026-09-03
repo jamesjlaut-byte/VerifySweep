@@ -1097,7 +1097,9 @@ class handler(BaseHTTPRequestHandler):
                 if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise ValueError('Enter a valid email address.')
                 if clean(p.get('evidence_url')) and not valid_http_url(clean(p.get('evidence_url'),1000)):raise ValueError('Use a valid public evidence URL.')
                 if len(clean(p.get('details'),3000))<10:raise ValueError('Explain your connection to this profile.')
-                rid=submit_profile_claim_db(p);return self.sendj(201,{'id':rid,'status':'pending','message':'Claim request received for human review. Claiming a profile does not verify identity, affiliation, credentials, or the company.'})
+                rid=submit_profile_claim_db(p)
+                print(json.dumps({'event':'profile_claim_saved','claim_id':rid,'email_notification':'not_enabled'}),flush=True)
+                return self.sendj(201,{'id':rid,'claim_reference':'VS-CLAIM-'+str(rid),'status':'pending','email_notification':'not_enabled','message':'Claim request saved for human review. No automatic email has been sent. Save your claim reference. Claiming a profile does not verify identity, affiliation, credentials, or the company.'})
             if clean(p.get('action'),40)=='review_profile_claim':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 try:claim_id=int(p.get('claim_id'))

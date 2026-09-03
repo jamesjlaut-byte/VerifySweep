@@ -8,6 +8,9 @@
   <style>
     *{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui;color:#101010}header{background:#050505;padding:18px 5%}header img{width:220px;max-width:60vw}.wrap{max-width:760px;margin:auto;padding:40px 20px}h1{font-size:clamp(34px,7vw,52px);line-height:1.05}label{display:block;font-weight:800;margin:16px 0 6px}input,textarea{width:100%;padding:13px;border:1px solid #d8d8d8;border-radius:8px;font:inherit}textarea{min-height:150px}.btn{margin-top:18px;border:0;border-radius:8px;padding:14px 18px;background:#f36b10;color:#fff;font-weight:850}.notice{border-left:5px solid #f36b10;background:#f7f7f7;padding:16px}.hidden{position:absolute;left:-9999px}@media(max-width:600px){.wrap{padding:30px 16px}.btn{width:100%;min-height:48px}}
   </style>
+  <style>
+    [hidden]{display:none!important}.receipt{margin:22px 0;border:2px solid #f36b10;border-radius:12px;padding:20px;background:#fff}.receipt h2{margin-top:0}.receipt a{color:#101010;font-weight:800}.receipt:focus{outline:3px solid #101010;outline-offset:3px}.btn:disabled{opacity:.65;cursor:wait}#message:not(:empty){padding:16px;border-left:5px solid #f36b10;background:#f7f7f7}#message:focus{outline:2px solid #101010}.help{font-size:14px}
+  </style>
 </head>
 <body>
   <header><a href="/"><img src="/VerifySweep-Official-Logo-Black.png" alt="VerifySweep"></a></header>
@@ -16,21 +19,50 @@
     <h1>Request access to a profile.</h1>
     <p id="subject"></p>
     <div class="notice"><b>A claim is not verification.</b> Every request receives human review. Approval of profile management does not verify identity, company affiliation, credentials, workmanship, or the company itself.</div>
+    <section id="receipt" class="receipt" role="status" tabindex="-1" hidden>
+      <h2>Claim request received</h2>
+      <p id="receiptReference"></p>
+      <p>Your request is saved and pending human review. You do not need to submit it again. This receipt is not approval or verification.</p>
+      <p><b>No automatic email has been sent.</b> Email notifications are not enabled for profile claims yet. Save this reference for your records.</p>
+      <p><a id="emailReceipt" href="mailto:info@verifysweep.com">Email VerifySweep about this claim</a> (opens your email app; you must send the email).</p>
+      <p><a href="/find-a-pro.html">Return to the directory</a></p>
+    </section>
+    <p id="message" role="status" tabindex="-1"></p>
     <form id="form">
       <label for="claimantName">Your name</label><input id="claimantName" maxlength="160" required>
       <label for="claimantEmail">Business email</label><input id="claimantEmail" type="email" maxlength="320" required>
       <label for="businessPhone">Business phone (optional)</label><input id="businessPhone" type="tel" maxlength="80">
       <label for="evidenceUrl">Public evidence URL (optional)</label><input id="evidenceUrl" type="url" maxlength="1000" placeholder="Company website profile or other public source">
-      <label for="details">Explain your connection to this profile</label><textarea id="details" maxlength="3000" required></textarea>
+      <label for="details">Explain your connection to this profile</label><textarea id="details" minlength="10" maxlength="3000" required></textarea>
       <label class="hidden" for="website">Leave blank</label><input class="hidden" id="website" tabindex="-1" autocomplete="off">
-      <button class="btn" type="submit">SUBMIT CLAIM REQUEST</button><p id="message" role="status"></p>
+      <p class="help">After submission, this page will show a claim reference if your request was saved. Automatic email notifications are not enabled yet.</p>
+      <button id="submitClaim" class="btn" type="submit">SUBMIT CLAIM REQUEST</button>
     </form>
   </main>
   <script>
     const params=new URLSearchParams(location.search),type=params.get('target_type')||'',id=params.get('target_id')||'',name=params.get('name')||'directory profile';
     const form=document.getElementById('form'),message=document.getElementById('message'),claimantName=document.getElementById('claimantName'),claimantEmail=document.getElementById('claimantEmail'),businessPhone=document.getElementById('businessPhone'),evidenceUrl=document.getElementById('evidenceUrl'),details=document.getElementById('details'),website=document.getElementById('website');
     document.getElementById('subject').textContent='Profile: '+name;
-    form.addEventListener('submit',async event=>{event.preventDefault();message.textContent='Submitting…';try{const response=await fetch('/api/directory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claim_profile',target_type:type,target_id:id,claimant_name:claimantName.value,claimant_email:claimantEmail.value,business_phone:businessPhone.value,evidence_url:evidenceUrl.value,details:details.value,website:website.value})}),data=await response.json();if(!response.ok)throw new Error(data.error||'Claim request could not be submitted.');form.reset();message.textContent=data.message}catch(error){message.textContent=error.message||'Claim request could not be submitted.'}});
+    const submit=document.getElementById('submitClaim'),receipt=document.getElementById('receipt');
+    let submitting=false,received=false;
+    function showMessage(text){message.textContent=text;message.focus();message.scrollIntoView({block:'center'});}
+    if(!['company','professional'].includes(type)||!/^[A-Za-z0-9_-]{1,160}$/.test(id)){form.hidden=true;showMessage('Open the profile you want to claim in the directory, then select CLAIM THIS PROFILE. This page is missing a valid profile reference.');}
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(submitting||received||form.hidden)return;
+      submitting=true;submit.disabled=true;submit.textContent='SAVING CLAIM…';form.setAttribute('aria-busy','true');message.textContent='Saving your claim request. Please wait…';
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+      try{
+        const response=await fetch('/api/directory',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},signal:controller.signal,body:JSON.stringify({action:'claim_profile',target_type:type,target_id:id,claimant_name:claimantName.value,claimant_email:claimantEmail.value,business_phone:businessPhone.value,evidence_url:evidenceUrl.value,details:details.value,website:website.value})});
+        let data;try{data=await response.json()}catch{throw new Error('We could not confirm whether your request was saved. Your entries are preserved. Contact info@verifysweep.com before submitting again.');}
+        if(!response.ok)throw new Error(data.error||'The request could not be confirmed. Your entries are preserved. Contact info@verifysweep.com for help.');
+        if(data.status!=='pending'||!/^\d+$/.test(String(data.id)))throw new Error('The server did not return a claim reference. Your request may have been saved. Contact info@verifysweep.com before submitting again.');
+        const reference='VS-CLAIM-'+data.id;received=true;
+        document.getElementById('receiptReference').textContent='Reference: '+reference+' · Status: Pending review';
+        document.getElementById('emailReceipt').href='mailto:info@verifysweep.com?subject='+encodeURIComponent('Profile claim '+reference)+'&body='+encodeURIComponent('Please review my profile claim.\nReference: '+reference+'\nProfile: '+name+'\nProfile ID: '+id);
+        message.textContent='';form.hidden=true;receipt.hidden=false;receipt.focus();receipt.scrollIntoView({block:'start'});
+      }catch(error){showMessage(error.name==='AbortError'?'The request took too long to confirm. It may already have been saved. Your entries are preserved. Please contact info@verifysweep.com before submitting again.':error.message||'We could not confirm the request. Your entries are preserved. Contact info@verifysweep.com before submitting again.');}
+      finally{clearTimeout(timer);submitting=false;submit.disabled=false;submit.textContent='SUBMIT CLAIM REQUEST';form.removeAttribute('aria-busy');}
+    });
   </script>
 </body>
 </html>
