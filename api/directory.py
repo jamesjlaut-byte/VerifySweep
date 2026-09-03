@@ -233,6 +233,9 @@ NORMALIZED_DIRECTORY_SCHEMA=(
   'CREATE INDEX IF NOT EXISTS directory_verification_review_due_idx ON directory_verification_records (review_due_at,status)',
   'CREATE INDEX IF NOT EXISTS directory_evidence_verification_idx ON directory_evidence (verification_id,visibility)',
   'CREATE INDEX IF NOT EXISTS directory_reports_review_idx ON directory_reports (review_status,created_at)',
+  'ALTER TABLE directory_reports ADD COLUMN IF NOT EXISTS reviewed_by TEXT',
+  'ALTER TABLE directory_reports ADD COLUMN IF NOT EXISTS review_note TEXT',
+  'ALTER TABLE directory_reports ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()',
   'CREATE INDEX IF NOT EXISTS directory_migration_status_idx ON directory_legacy_migration_map (migration_status,legacy_record_id)',
   'CREATE INDEX IF NOT EXISTS directory_sources_company_idx ON directory_company_sources (company_id)',
   'CREATE INDEX IF NOT EXISTS directory_claims_queue_idx ON directory_claims (review_status,created_at)',
@@ -793,6 +796,33 @@ def report_problem_db(p):
         conn.commit();return rid
     finally:conn.close()
 
+def list_reports_db(status='pending'):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('''SELECT id,target_type,target_id,reason,details,source_url,review_status,created_at,reviewed_by,review_note,updated_at
+              FROM directory_reports WHERE review_status=%s ORDER BY created_at ASC LIMIT 200''',(status,))
+            keys=['id','target_type','target_id','reason','details','source_url','review_status','created_at','reviewed_by','review_note','updated_at']
+            return [rowdict(keys,row) for row in cur.fetchall()]
+    finally:conn.close()
+
+def review_report_db(report_id,status,reviewer,note):
+    conn=dbconn()
+    if not conn:raise RuntimeError('Directory database is not configured.')
+    try:
+        ensure(conn)
+        with conn.cursor() as cur:
+            cur.execute('SELECT review_status FROM directory_reports WHERE id=%s FOR UPDATE',(report_id,));row=cur.fetchone()
+            if not row:raise ValueError('Report not found.')
+            old_status=row[0]
+            cur.execute('''UPDATE directory_reports SET review_status=%s,reviewed_by=%s,review_note=%s,updated_at=now(),resolved_at=CASE WHEN %s IN ('resolved','dismissed') THEN now() ELSE NULL END WHERE id=%s''',(status,reviewer,note,status,report_id))
+            cur.execute('''INSERT INTO directory_audit_log(actor_id,action,target_type,target_id,old_value,new_value,reason)
+              VALUES(%s,'review_directory_report','directory_report',%s,%s::jsonb,%s::jsonb,%s)''',(reviewer,str(report_id),json.dumps({'review_status':old_status}),json.dumps({'review_status':status}),note))
+        conn.commit();return {'id':report_id,'review_status':status}
+    finally:conn.close()
+
 class handler(BaseHTTPRequestHandler):
     def sendj(self,code,p):
         b=json.dumps(public_directory_record(p),default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -800,6 +830,11 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             qs=parse_qs(urlparse(self.path).query);view=clean((qs.get('view') or ['professionals'])[0],30).lower()
+            if view=='admin_reports':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                status=clean((qs.get('status') or ['pending'])[0],20)
+                if status not in ('pending','reviewing','resolved','dismissed'):return self.sendj(400,{'error':'Choose a valid report status.'})
+                reports=list_reports_db(status);return self.sendj(200,{'reports':reports,'count':len(reports),'status':status})
             if view=='companies':
                 identifier=clean((qs.get('id') or [''])[0],160)
                 if identifier:
@@ -843,6 +878,14 @@ class handler(BaseHTTPRequestHandler):
             n=int(self.headers.get('Content-Length','0'))
             if n<2 or n>30000:raise ValueError('Invalid request.')
             p=json.loads(self.rfile.read(n).decode());required=['company','professional_name','credential','issuer','credential_source','postal_code']
+            if clean(p.get('action'),40)=='review_report':
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                try:report_id=int(p.get('report_id'))
+                except (TypeError,ValueError):raise ValueError('Choose a valid report.')
+                status=clean(p.get('status'),20);note=clean(p.get('review_note'),1000);reviewer=clean(self.headers.get('X-VerifySweep-Reviewer'),120) or 'authorized-reviewer'
+                if status not in ('reviewing','resolved','dismissed'):raise ValueError('Choose a valid review status.')
+                if len(note)<5:raise ValueError('Add a review note for the audit trail.')
+                return self.sendj(200,review_report_db(report_id,status,reviewer,note))
             if clean(p.get('action'),40)=='report_problem':
                 if clean(p.get('website'),200):raise ValueError('Invalid request.')
                 if clean(p.get('target_type'),20) not in ('company','professional'):raise ValueError('Choose a valid record type.')

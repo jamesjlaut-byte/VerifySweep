@@ -113,6 +113,14 @@ class DirectorySchemaTests(unittest.TestCase):
             self.assertFalse(DIRECTORY.admin_authorized({'Authorization':'Bearer wrong'}))
             self.assertTrue(DIRECTORY.admin_authorized({'Authorization':'Bearer secret'}))
 
+    def test_report_review_requires_admin_and_writes_audit_history(self):
+        source=(ROOT/'api'/'directory.py').read_text()
+        self.assertIn("view=='admin_reports'",source)
+        self.assertIn("clean(p.get('action'),40)=='review_report'",source)
+        self.assertIn("'review_directory_report'",source)
+        self.assertIn('Administrative authorization required.',source)
+        self.assertIn('directory_reports ADD COLUMN IF NOT EXISTS review_note',source)
+
     def test_status_constraints_keep_claim_and_verification_separate(self):
         sql = '\n'.join(DIRECTORY.NORMALIZED_DIRECTORY_SCHEMA)
         self.assertIn("claim_status IN ('unclaimed','claim_pending','claimed')", sql)
