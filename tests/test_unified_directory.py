@@ -117,7 +117,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),31)
+        self.assertGreaterEqual(len(csia),41)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
@@ -140,6 +140,15 @@ class UnifiedDirectoryTests(unittest.TestCase):
         pa_names={name for row in pennsylvania for name in row['reviewed_professional_names']}
         self.assertTrue({'Alfred Papile','Maurice Ware','Claudio Zhinin','John Pilger','Marlon Juarbe'}.issubset(ny_names))
         self.assertTrue({'Joe Soriano','Mark Kerwood','Tyler Bollinger','Isabella Weidman','Andy Homan'}.issubset(pa_names))
+
+    def test_additional_pennsylvania_csia_professionals_are_grouped_by_company(self):
+        rows=directory.search_static_companies(q='Chim Chimney Sweeps',state='PA',issuer='CSIA',verified_only=True)
+        self.assertEqual(len(rows),1)
+        self.assertTrue(
+            {'Tyler Bollinger','Isabella Weidman','Steven Wallower','Joe Corcoran','Ben Bowen-Aretz'}.issubset(
+                set(rows[0]['reviewed_professional_names'])
+            )
+        )
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
