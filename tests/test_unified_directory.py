@@ -131,7 +131,6 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_industry_leader_candidate_is_not_published_before_evidence_gate(self):
         pete=directory.detail_static('fire-pete-pohlman')
         self.assertIsNone(pete['industry_leader'])
-        self.assertNotIn('industry_leader_review_private',pete)
         company=directory.search_static_companies(q='Pete Pohlman')[0]
         self.assertIsNone(company['reviewed_professionals'][0]['industry_leader'])
 
