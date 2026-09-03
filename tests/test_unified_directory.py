@@ -117,7 +117,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_csia_records_are_named_and_link_to_individual_official_profiles(self):
         records=directory.static_records()
         csia=[row for row in records if row.get('issuer')=='CSIA']
-        self.assertGreaterEqual(len(csia),50)
+        self.assertGreaterEqual(len(csia),57)
         self.assertTrue(all(row['holder'] and row['company'] for row in csia))
         self.assertTrue(all(row['credential']=='Certified Chimney Sweep' for row in csia))
         self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in csia))
@@ -156,6 +156,15 @@ class UnifiedDirectoryTests(unittest.TestCase):
         curley=directory.search_static_companies(q="Lou Curley's Chimney Service",state='PA',issuer='CSIA',verified_only=True)
         self.assertEqual(len(curley),1)
         self.assertTrue({'Joe Soriano','Steven A Boppell','Dave Curley','Lou Curley'}.issubset(set(curley[0]['reviewed_professional_names'])))
+
+    def test_ohio_csia_professionals_are_named_and_grouped(self):
+        ohio=directory.search_static_companies(state='OH',issuer='CSIA',verified_only=True)
+        names={name for row in ohio for name in row['reviewed_professional_names']}
+        self.assertTrue({'David Zilberman','Dennis Jacob','Kevin Daniel','Ken Hoelscher','Dylan Dunivan','Cody Carter','Jake Barton'}.issubset(names))
+        abbey=next(row for row in ohio if row['company']=='Abbey Road Chimney Services LLC')
+        self.assertEqual(set(abbey['reviewed_professional_names']),{'Kevin Daniel','Ken Hoelscher','Dylan Dunivan'})
+        pro_sweep=next(row for row in ohio if row['company']=='Pro Sweep Chimney Service')
+        self.assertEqual(set(pro_sweep['reviewed_professional_names']),{'Dennis Jacob','Cody Carter'})
 
     def test_reviewed_professional_links_to_same_state_canonical_company(self):
         rows,_=directory.search_companies_db(q='Matthew Mirabal',verified_only=True)
