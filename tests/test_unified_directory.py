@@ -94,6 +94,14 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('rows.sort(key=company_trust_key)',source)
         self.assertIn('fallback_by_key={company_key(item):item for item in fallback}',source)
 
+    def test_shared_contact_signals_are_neutral_review_indicators(self):
+        records=[{'company':'Alpha Chimney','website':'https://shared.example/'},{'company':'Beta Chimney','website':'https://shared.example/'}]
+        domains,phones=directory.data_quality_indexes(records)
+        signals=directory.review_signals(records[0],domains,phones)
+        self.assertEqual(signals[0]['status'],'REVIEW NEEDED')
+        self.assertEqual(signals[0]['signal'],'SHARED WEBSITE DOMAIN')
+        self.assertIn('does not establish',signals[0]['public_explanation'])
+
     def test_founder_affiliated_company_has_no_special_status_or_rank(self):
         rows=directory.search_static_companies(state='TX')
         hill=next(row for row in rows if row['company']=='Hill Country Air Duct And Chimney Sweeps LLC')

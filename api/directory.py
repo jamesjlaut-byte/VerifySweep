@@ -495,9 +495,33 @@ def add_ranking_explanation(item):
     item['ranking_explanation']=' · '.join(signals) or 'No independently verified professional trust signals currently on file'
     return item
 
+def normalized_contact(item):
+    domain=clean(item.get('normalized_domain'),240).lower()
+    if not domain:
+        try:domain=(urlparse(clean(item.get('website'),1000)).hostname or '').lower().removeprefix('www.')
+        except:domain=''
+    phone=re.sub(r'\D','',clean(item.get('normalized_phone') or item.get('phone'),80))
+    return domain,phone
+
+def data_quality_indexes(records):
+    domains={};phones={}
+    for record in records:
+        name=clean(record.get('company'),200)
+        domain,phone=normalized_contact(record)
+        if domain:domains.setdefault(domain,set()).add(name)
+        if len(phone)>=10:phones.setdefault(phone,set()).add(name)
+    return domains,phones
+
+def review_signals(source,domain_index,phone_index):
+    domain,phone=normalized_contact(source);signals=[]
+    if domain and len(domain_index.get(domain,set()))>1:signals.append({'status':'REVIEW NEEDED','signal':'SHARED WEBSITE DOMAIN','public_explanation':'This domain appears on more than one differently named company record. Shared data alone does not establish common ownership or wrongdoing.'})
+    if len(phone)>=10 and len(phone_index.get(phone,set()))>1:signals.append({'status':'REVIEW NEEDED','signal':'SHARED BUSINESS PHONE','public_explanation':'This business phone appears on more than one differently named company record. Shared data alone does not establish common ownership or wrongdoing.'})
+    return signals
+
 def search_static_companies(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type=''):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower();issuer_needle=clean(issuer,100).lower();credential_needle=clean(credential_type,200).lower();points=zip_centroids();origin=points.get(zipcode)
     company_sources=[*static_company_records(),*national_company_records()]
+    domain_index,phone_index=data_quality_indexes(company_sources)
     known={(clean(x.get('company'),200).lower(),clean(x.get('zip') or x.get('postal_code'),5),clean(x.get('city') or x.get('hq_city'),120).lower(),clean(x.get('state') or x.get('hq_state'),40).lower()) for x in company_sources}
     for person in static_records():
         identity=(clean(person.get('company'),200).lower(),clean(person.get('zip'),5),clean(person.get('city'),120).lower(),clean(person.get('state'),40).lower())
@@ -544,6 +568,10 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'verified_professional_count':len(reviewed_people),'verified_affiliation_count':sum(1 for person in reviewed_professionals if person.get('company_affiliation_status')=='VERIFIED'),'verification_scope':clean(source.get('verification_scope'),120),
           'verification_note':clean(source.get('verification_note'),600)
         })
+        incoming_signals=review_signals(source,domain_index,phone_index)
+        if incoming_signals:
+            merged={json.dumps(value,sort_keys=True):value for value in [*(item.get('data_quality_signals') or []),*incoming_signals]}
+            item['data_quality_signals']=list(merged.values())
         if distance is not None and (item.get('distance') is None or distance<item['distance']):item['distance']=round(distance,1)
         checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
         if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
