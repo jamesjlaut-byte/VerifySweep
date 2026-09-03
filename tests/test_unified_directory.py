@@ -70,9 +70,15 @@ class UnifiedDirectoryTests(unittest.TestCase):
 
     def test_city_location_ranks_before_service_area(self):
         rows=directory.search_static_companies(city='Austin',state='TX')
-        ranks=[row['match_rank'] for row in rows]
-        self.assertEqual(ranks,sorted(ranks))
-        self.assertEqual(rows[0]['match_reason'],'City match')
+        self.assertEqual(rows[0]['company'],'Hill Country Air Duct And Chimney Sweeps LLC')
+        self.assertEqual(rows[0]['public_status'],'verified')
+        unverified_ranks=[row['match_rank'] for row in rows if row['public_status']!='verified']
+        self.assertEqual(unverified_ranks,sorted(unverified_ranks))
+
+    def test_verified_company_ranks_first_in_matching_results(self):
+        rows=directory.search_static_companies(state='TX')
+        self.assertEqual(rows[0]['company'],'Hill Country Air Duct And Chimney Sweeps LLC')
+        self.assertEqual(rows[0]['display_status'],'BUSINESS IDENTITY VERIFIED')
 
     def test_reviewed_professional_name_search_uses_reviewed_records(self):
         rows=directory.search_static_companies(q='Pete Pohlman')

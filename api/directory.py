@@ -391,7 +391,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         else:rank,reason=8,'Directory match'
         if item.get('match_rank') is None or rank<item['match_rank']:
             item['match_rank']=rank;item['match_reason']=reason
-    return sorted(groups.values(),key=lambda item:(item.get('match_rank',99),item['company'].lower()))
+    return sorted(groups.values(),key=lambda item:(0 if item.get('public_status')=='verified' else 1,item.get('match_rank',99),item['company'].lower()))
 
 def company_professionals(company):
     rows=[]
