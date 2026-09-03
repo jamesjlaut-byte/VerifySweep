@@ -10,6 +10,18 @@ directory=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(director
 
 
 class UnifiedDirectoryTests(unittest.TestCase):
+    def test_unverified_or_expired_records_do_not_boost_location_rank(self):
+        verified={'company':'Verified Sweep','match_rank':5,'distance':40,'reviewed_professionals':[{'holder':'Current Person','display_status':'CREDENTIAL VERIFIED'}]}
+        for status in ('EXPIRED','SELF-REPORTED','VERIFICATION NEEDED','REVERIFICATION REQUIRED','UNABLE TO VERIFY','DISPUTED'):
+            other={'company':'Nearby Sweep','match_rank':4,'distance':1,'reviewed_professionals':[{'holder':str(i),'display_status':status,'identity_status':'VERIFIED','company_affiliation_status':'VERIFIED'} for i in range(5)]}
+            self.assertLess(directory.company_trust_key(verified),directory.company_trust_key(other),status)
+
+    def test_multiple_credentials_do_not_multiply_identity_and_affiliation_rank(self):
+        person={'holder':'Same Person','display_status':'CREDENTIAL VERIFIED','identity_status':'VERIFIED','company_affiliation_status':'VERIFIED'}
+        company={'company':'Example','match_rank':5,'reviewed_professionals':[person]}
+        duplicate={**company,'reviewed_professionals':[person,dict(person),{**person,'holder':'SAME PERSON'}]}
+        self.assertEqual(directory.company_trust_key(company),directory.company_trust_key(duplicate))
+
     def test_directory_uses_current_nfi_public_search_entry(self):
         page=(ROOT/'find-a-pro.html').read_text()
         self.assertIn('https://www.nficertified.org/public/',page)

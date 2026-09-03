@@ -540,14 +540,14 @@ def reviewed_people_for_company(company,city,state,zipcode):
 
 def company_trust_key(item):
     professionals=item.get('reviewed_professionals') or []
-    affiliation_count=sum(1 for person in professionals if person.get('company_affiliation_status')=='VERIFIED')
-    identity_count=sum(1 for person in professionals if person.get('identity_status')=='VERIFIED')
-    credential_count=len({person.get('holder') for person in professionals if person.get('holder')})
+    affiliation_count=len({clean(person.get('holder'),200).casefold() for person in professionals if person.get('holder') and person.get('company_affiliation_status')=='VERIFIED'})
+    identity_count=len({clean(person.get('holder'),200).casefold() for person in professionals if person.get('holder') and person.get('identity_status')=='VERIFIED'})
+    credential_count=len({clean(person.get('holder'),200).casefold() for person in professionals if person.get('holder') and person.get('display_status')=='CREDENTIAL VERIFIED'})
     match_rank=item.get('match_rank',99)
     # Exact business/professional text matches remain deterministic. For location
     # discovery, verified professional facts lead and location quality follows.
     search_group=match_rank if match_rank<=3 else 4
-    return (search_group,-affiliation_count,-identity_count,-credential_count,match_rank,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower())
+    return (search_group,-credential_count,-identity_count,-affiliation_count,match_rank,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower())
 
 def add_ranking_explanation(item):
     signals=[]
