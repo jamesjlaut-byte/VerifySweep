@@ -26,7 +26,7 @@ COMPANY_STATUS_LABELS={
 }
 OFFICIAL_SOURCES={
   'csia':'https://web.csia.org/CSIA-Certified',
-  'nfi':'https://www.nficertified.org/search-instructor/'
+  'nfi':'https://www.nficertified.org/public/'
 }
 ZIP_LOOKUP_BASE='https://api.zippopotam.us/us/'
 NORMALIZED_DIRECTORY_SCHEMA=(
@@ -541,6 +541,8 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         reviewed_professionals=reviewed_professionals_for_company(company,company_city,company_state,company_zip)
         if issuer_needle or credential_needle:
             reviewed_professionals=[person for person in reviewed_professionals if (not issuer_needle or person['issuer'].lower()==issuer_needle) and (not credential_needle or person['credential'].lower()==credential_needle)]
+        if verified_only:
+            reviewed_professionals=[person for person in reviewed_professionals if person.get('display_status')=='CREDENTIAL VERIFIED']
         reviewed_people=sorted(set(person['holder'] for person in reviewed_professionals),key=str.lower)
         service_locations=service_locations_for(source,company_state);service_areas=[location['city'] for location in service_locations];service_counties=service_counties_for(source);service_area_names=' '.join([*(location['city']+' '+location['state'] for location in service_locations),*service_counties])
         candidate_names=' '.join(clean(p.get('name_or_note'),300) for p in source.get('professional_candidates') or [] if isinstance(p,dict))
@@ -573,7 +575,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'display_status':company_status_label(source.get('public_status') or 'unverified'),
           'company_claims':source.get('company_claims') or [],'professional_candidates':source.get('professional_candidates') or [],
           'sources':source.get('sources') or [],'reviewed_professional_names':reviewed_people,'reviewed_professionals':reviewed_professionals,
-          'verified_professional_count':len(reviewed_people),'verified_affiliation_count':sum(1 for person in reviewed_professionals if person.get('company_affiliation_status')=='VERIFIED'),'verification_scope':clean(source.get('verification_scope'),120),
+          'verified_professional_count':len({person['holder'] for person in reviewed_professionals if person.get('display_status')=='CREDENTIAL VERIFIED'}),'verified_affiliation_count':sum(1 for person in reviewed_professionals if person.get('company_affiliation_status')=='VERIFIED'),'verification_scope':clean(source.get('verification_scope'),120),
           'verification_note':clean(source.get('verification_note'),600)
         })
         incoming_signals=review_signals(source,domain_index,phone_index)
@@ -605,7 +607,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
                 item[field]=list(merged.values())
         if reviewed_people:
             item['reviewed_professional_names']=sorted(set([*(item.get('reviewed_professional_names') or []),*reviewed_people]),key=str.lower)
-            item['verified_professional_count']=len(item['reviewed_professional_names'])
+            item['verified_professional_count']=len({person['holder'] for person in [*(item.get('reviewed_professionals') or []),*reviewed_professionals] if person.get('display_status')=='CREDENTIAL VERIFIED'})
             combined={person['id'] or '|'.join((person['holder'],person['credential'],person['issuer'])):person for person in [*(item.get('reviewed_professionals') or []),*reviewed_professionals]}
             item['reviewed_professionals']=sorted(combined.values(),key=lambda person:(person['holder'].lower(),person['credential'].lower()))
             item['verified_affiliation_count']=sum(1 for person in item['reviewed_professionals'] if person.get('company_affiliation_status')=='VERIFIED')
@@ -683,8 +685,10 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
                 item['reviewed_professionals']=reviewed_professionals_for_company(item['company'],clean(item.get('city'),120),clean(item.get('state'),40),clean(item.get('zip'),5))
                 if issuer or credential_type:
                     item['reviewed_professionals']=[person for person in item['reviewed_professionals'] if (not issuer or person['issuer'].lower()==issuer.lower()) and (not credential_type or person['credential'].lower()==credential_type.lower())]
+                if verified_only:
+                    item['reviewed_professionals']=[person for person in item['reviewed_professionals'] if person.get('display_status')=='CREDENTIAL VERIFIED']
                 item['reviewed_professional_names']=sorted(set(person['holder'] for person in item['reviewed_professionals']),key=str.lower)
-                item['verified_professional_count']=len(item['reviewed_professional_names'])
+                item['verified_professional_count']=len({person['holder'] for person in item['reviewed_professionals'] if person.get('display_status')=='CREDENTIAL VERIFIED'})
                 item['verified_affiliation_count']=sum(1 for person in item['reviewed_professionals'] if person.get('company_affiliation_status')=='VERIFIED')
                 item['company_identity_status']='UNKNOWN';item['contact_consistency_status']='NOT REVIEWED';item['profile_claim_status']=clean(item.get('claim_status'),60).upper() or 'UNCLAIMED'
                 if not (issuer or credential_type) or item['reviewed_professionals']:rows.append(item)

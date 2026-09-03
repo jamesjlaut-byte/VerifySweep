@@ -14,6 +14,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
         page=(ROOT/'find-a-pro.html').read_text()
         self.assertIn('https://www.nficertified.org/public/',page)
         self.assertNotIn('https://www.nficertified.org/public/find-an-nfi-pro/',page)
+        self.assertEqual(directory.OFFICIAL_SOURCES['nfi'],'https://www.nficertified.org/public/')
 
     def test_national_seed_is_canonical_and_neutral(self):
         data=json.loads((ROOT/'data'/'national-directory.json').read_text())
@@ -135,6 +136,11 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertTrue(all(row['verified_professional_count']>0 for row in rows))
         claims_only=directory.search_static_companies(q='1st Choice Chimney Commercial LLC')
         self.assertEqual(claims_only[0]['verified_professional_count'],0)
+
+    def test_verified_only_filter_excludes_stale_credentials(self):
+        stale={'id':'stale-1','holder':'Stale Person','company':'Stale Sweep','credential':'Certified Chimney Sweep','issuer':'CSIA','verification_status':'verified_from_official_source','verified_at':'2020-01-01T00:00:00Z','recheck_due_at':'2020-02-01T00:00:00Z','source_available':True,'city':'Austin','state':'TX','zip':'78701'}
+        with patch.object(directory,'static_records',return_value=[stale]),patch.object(directory,'static_company_records',return_value=[]),patch.object(directory,'national_company_records',return_value=[]):
+            self.assertEqual(directory.search_static_companies(city='Austin',state='TX',verified_only=True),[])
 
     def test_ncsg_records_are_named_current_source_credentials(self):
         records=directory.static_records()
