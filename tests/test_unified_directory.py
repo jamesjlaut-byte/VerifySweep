@@ -278,6 +278,14 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('Verify the person—not just the company',search)
         self.assertIn('COMPANY DISCOVERY RECORDS',search)
         self.assertIn("person.credentials[0].id",search)
+
+    def test_search_explains_credential_freshness_and_mobile_status_layout(self):
+        search=(ROOT/'find-a-pro.html').read_text()
+        profile=(ROOT/'professional-profile.html').read_text()
+        company=(ROOT/'company-profile.html').read_text()
+        self.assertIn('Credential verification is time-limited.',search)
+        self.assertIn('next review date',search)
+        self.assertIn('@media(max-width:600px){.statusGrid',search)
         self.assertIn("^[A-Za-z0-9_-]{1,80}$",profile)
         self.assertIn("'VERIFY WITH ISSUER'",profile)
         self.assertIn("'VERIFICATION DETAILS'",profile)
