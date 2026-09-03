@@ -8,6 +8,7 @@ DB=os.environ.get('DATABASE_URL','')
 ROOT=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC_RECORDS=os.path.join(ROOT,'data','certified-professionals.json')
 STATIC_COMPANIES=os.path.join(ROOT,'data','directory-companies.json')
+NATIONAL_COMPANIES=os.path.join(ROOT,'data','national-directory.json')
 ZIP_CENTROIDS=os.path.join(ROOT,'data','us-zcta-centroids.tsv')
 PUBLISHED_STATUS='verified'
 ALLOWED_RADII={10,25,50,75,100}
@@ -71,6 +72,21 @@ NORMALIZED_DIRECTORY_SCHEMA=(
     source_reference TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (postal_code IS NOT NULL OR city IS NOT NULL)
   )''',
+  "ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS area_type TEXT NOT NULL DEFAULT 'city'",
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS county TEXT',
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS source_url TEXT',
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS evidence_text TEXT',
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS evidence_type TEXT',
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS captured_at TIMESTAMPTZ',
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ',
+  "ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS evidence_status TEXT NOT NULL DEFAULT 'review_needed'",
+  'ALTER TABLE directory_service_areas ADD COLUMN IF NOT EXISTS content_hash TEXT',
+  '''CREATE TABLE IF NOT EXISTS directory_company_claims (
+    id BIGSERIAL PRIMARY KEY, company_id BIGINT NOT NULL REFERENCES directory_companies(id) ON DELETE CASCADE,
+    claim_text TEXT NOT NULL, classification TEXT NOT NULL DEFAULT 'UNVERIFIED CLAIM',
+    source_url TEXT, evidence_note TEXT, last_checked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )''',
   '''CREATE TABLE IF NOT EXISTS directory_audit_log (
     id BIGSERIAL PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL,
     old_value JSONB, new_value JSONB, reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -125,6 +141,14 @@ def static_records():
 def static_company_records():
     try:
         with open(STATIC_COMPANIES,encoding='utf-8') as source:
+            payload=json.load(source)
+        return payload.get('records',[]) if isinstance(payload,dict) else []
+    except (OSError,ValueError):return []
+
+@lru_cache(maxsize=1)
+def national_company_records():
+    try:
+        with open(NATIONAL_COMPANIES,encoding='utf-8') as source:
             payload=json.load(source)
         return payload.get('records',[]) if isinstance(payload,dict) else []
     except (OSError,ValueError):return []
@@ -227,7 +251,14 @@ def rowdict(keys,row):return dict(zip(keys,row))
 def company_status_label(status):return COMPANY_STATUS_LABELS.get(clean(status,60).lower(),'UNVERIFIED')
 
 def company_key(item):
-    return (clean(item.get('company'),200).lower(),clean(item.get('zip'),5))
+    domain=clean(item.get('normalized_domain'),240).lower()
+    if not domain:
+        try:domain=(urlparse(clean(item.get('website'),1000)).hostname or '').lower().removeprefix('www.')
+        except ValueError:domain=''
+    if domain:return ('domain',domain)
+    phone=re.sub(r'\D','',clean(item.get('phone'),80))
+    if phone:return ('phone',phone[-10:])
+    return ('identity',clean(item.get('company'),200).lower(),clean(item.get('city') or item.get('hq_city'),120).lower(),clean(item.get('state') or item.get('hq_state'),40).lower())
 
 def service_areas_for(item):
     values=item.get('service_areas') or []
@@ -243,6 +274,7 @@ def service_locations_for(item,fallback_state=''):
     rows=[];seen=set()
     for value in item.get('service_locations') or []:
         if not isinstance(value,dict):continue
+        if clean(value.get('evidence_status'),40).lower() not in ('','active'):continue
         city=clean(value.get('city'),120);state=clean(value.get('state'),40) or fallback_state
         if not city:continue
         key=(city.lower(),state.lower())
@@ -254,10 +286,12 @@ def service_locations_for(item,fallback_state=''):
 
 def search_static_companies(zipcode='',q='',city='',state=''):
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower()
-    for source in [*static_company_records(),*static_records()]:
-        company=clean(source.get('company'),200);company_city=clean(source.get('city'),120);company_state=clean(source.get('state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
+    for source in [*static_company_records(),*national_company_records()]:
+        company=clean(source.get('company'),200);company_city=clean(source.get('city') or source.get('hq_city'),120);company_state=clean(source.get('state') or source.get('hq_state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
+        if clean(source.get('id'),160).startswith('national-') and not (source.get('website') or source.get('sources')):continue
         service_locations=service_locations_for(source,company_state);service_areas=[location['city'] for location in service_locations];service_counties=service_counties_for(source);service_area_names=' '.join([*(location['city']+' '+location['state'] for location in service_locations),*service_counties])
-        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names)).lower()
+        candidate_names=' '.join(clean(p.get('name_or_note'),300) for p in source.get('professional_candidates') or [] if isinstance(p,dict))
+        searchable=' '.join((company,company_city,company_state,company_zip,clean(source.get('website'),1000),service_area_names,candidate_names)).lower()
         if needle_tokens and not all(token in searchable for token in needle_tokens):continue
         if zipcode and zipcode!=company_zip and zipcode not in (source.get('service_zips') or []):continue
         location_matches_city=[location for location in service_locations if location['city'].lower()==city_needle]
@@ -266,17 +300,19 @@ def search_static_companies(zipcode='',q='',city='',state=''):
             office_matches=(not city_needle or city_needle==company_city.lower()) and state_needle==company_state.lower()
             service_matches=any((not city_needle or location['city'].lower()==city_needle) and location['state'].lower()==state_needle for location in service_locations)
             if not office_matches and not service_matches:continue
-        key=(company.lower(),company_zip)
+        key=company_key(source)
         item=groups.setdefault(key,{
-          'id':'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
+          'id':clean(source.get('id'),160) or 'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
           'company':company,'website':clean(source.get('website'),1000),'phone':clean(source.get('phone'),80),
           'city':company_city,'state':company_state,'zip':company_zip,'public_status':'unverified','claim_status':'unclaimed',
           'last_reviewed_at':clean(source.get('last_checked_at') or source.get('captured_at'),40) or None,'verification_due_at':None,
-          'source_type':clean(source.get('source_type'),80) or 'credential_directory_record','source_url':clean(source.get('source_url') or source.get('source'),1000),
+          'source_type':clean(source.get('source_type'),80) or 'directory_research_record','source_url':clean(source.get('source_url') or source.get('source') or next((v.get('url') for v in source.get('sources') or [] if isinstance(v,dict) and v.get('url')),''),1000),
           'service_areas':service_areas,'service_locations':service_locations,'service_area_labels':[location['city']+', '+location['state'] if location['state'] else location['city'] for location in service_locations],
           'service_counties':service_counties,'service_area_source_url':clean(source.get('service_area_source_url'),1000),
           'history_note':clean(source.get('history_note'),500),'recognition_source_url':clean(source.get('recognition_source_url'),1000),
-          'display_status':'UNVERIFIED'
+          'display_status':'UNVERIFIED',
+          'company_claims':source.get('company_claims') or [],'professional_candidates':source.get('professional_candidates') or [],
+          'sources':source.get('sources') or []
         })
         checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
         if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
@@ -291,14 +327,26 @@ def search_static_companies(zipcode='',q='',city='',state=''):
         if service_counties:item['service_counties']=sorted(set([*item.get('service_counties',[]),*service_counties]),key=str.lower)
         for field in ('service_area_source_url','history_note','recognition_source_url'):
             if not item.get(field) and source.get(field):item[field]=clean(source.get(field),1000 if field.endswith('_url') else 500)
+        for field in ('company_claims','professional_candidates','sources'):
+            incoming=source.get(field) or []
+            if incoming:
+                merged={json.dumps(value,sort_keys=True,default=str):value for value in [*(item.get(field) or []),*incoming]}
+                item[field]=list(merged.values())
         matched=next((location for location in service_locations if location['city'].lower()==city_needle and (not state_needle or location['state'].lower()==state_needle)),None) if city_needle else None
         if matched:item['matched_service_area']=matched['city'];item['matched_service_state']=matched['state']
+        if needle and candidate_names and all(token in candidate_names.lower() for token in needle_tokens):item['match_reason']='Named professional research match'
+        elif matched:item['match_reason']='Published service area match'
+        elif city_needle and company_city.lower()==city_needle:item['match_reason']='Business location match'
+        elif needle:item['match_reason']='Company or directory information match'
+        else:item['match_reason']='Directory match'
     return sorted(groups.values(),key=lambda item:item['company'].lower())
 
 def company_professionals(company):
     rows=[]
     for source in static_records():
-        if company_key(source)!=company_key(company):continue
+        same_name=clean(source.get('company'),200).lower()==clean(company.get('company'),200).lower()
+        same_location=clean(source.get('zip'),5)==clean(company.get('zip'),5) or (clean(source.get('city'),120).lower()==clean(company.get('city'),120).lower() and clean(source.get('state'),40).lower()==clean(company.get('state'),40).lower())
+        if not (same_name and same_location):continue
         item={k:source.get(k) for k in ('id','holder','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available')}
         item['display_status'],item['status_note']=static_status(source);rows.append(item)
     return sorted(rows,key=lambda item:(clean(item.get('holder'),200),clean(item.get('credential'),200)))
