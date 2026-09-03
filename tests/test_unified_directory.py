@@ -89,12 +89,21 @@ class UnifiedDirectoryTests(unittest.TestCase):
 
     def test_reviewed_individual_filter_does_not_promote_company_claims(self):
         rows=directory.search_static_companies(verified_only=True)
-        self.assertEqual({row['company'] for row in rows},{
+        self.assertTrue({
             'Black Velvet Chimney','Duct Time','Hill Country Air Duct And Chimney Sweeps LLC','Wolfman Chimney & Fireplace'
-        })
+        }.issubset({row['company'] for row in rows}))
         self.assertTrue(all(row['verified_professional_count']>0 for row in rows))
         claims_only=directory.search_static_companies(q='1st Choice Chimney Commercial LLC')
         self.assertEqual(claims_only[0]['verified_professional_count'],0)
+
+    def test_ncsg_records_are_named_current_source_credentials(self):
+        records=directory.static_records()
+        ncsg=[row for row in records if row.get('issuer')=='NCSG']
+        self.assertEqual(len(ncsg),12)
+        self.assertTrue(all(row['holder'] and row['company'] for row in ncsg))
+        self.assertTrue(all(row['credential']=='Accredited Certified Chimney Professional' for row in ncsg))
+        self.assertTrue(all(row['verification_status']=='verified_from_official_source' for row in ncsg))
+        self.assertTrue(all(row['source']=='https://ncsg.org/find-a-sweep/find-a-certified-sweep' for row in ncsg))
 
 
 if __name__=='__main__':unittest.main()
