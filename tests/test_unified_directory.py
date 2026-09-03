@@ -142,6 +142,14 @@ class UnifiedDirectoryTests(unittest.TestCase):
         with patch.object(directory,'static_records',return_value=[stale]),patch.object(directory,'static_company_records',return_value=[]),patch.object(directory,'national_company_records',return_value=[]):
             self.assertEqual(directory.search_static_companies(city='Austin',state='TX',verified_only=True),[])
 
+    def test_professional_search_excludes_stale_credentials_but_detail_preserves_status(self):
+        stale={'id':'stale-professional','holder':'Stale Person','company':'Stale Sweep','credential':'Certified Chimney Sweep','issuer':'CSIA','verification_status':'verified_from_official_source','verified_at':'2020-01-01T00:00:00Z','recheck_due_at':'2020-02-01T00:00:00Z','source_available':True,'city':'Austin','state':'TX','zip':'78701'}
+        with patch.object(directory,'static_records',return_value=[stale]):
+            rows,_=directory.search_static('','Stale Person',25)
+            detail=directory.detail_static('stale-professional')
+        self.assertEqual(rows,[])
+        self.assertEqual(detail['display_status'],'REVERIFICATION REQUIRED')
+
     def test_ncsg_records_are_named_current_source_credentials(self):
         records=directory.static_records()
         ncsg=[row for row in records if row.get('issuer')=='NCSG']

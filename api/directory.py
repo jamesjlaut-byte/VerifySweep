@@ -359,7 +359,9 @@ def search_static(zipcode,q='',radius=25):
             if distance>radius:continue
         elif zipcode and zipcode!=clean(item.get('zip'),5) and zipcode not in (item.get('service_zips') or []):continue
         item['distance']=round(distance,1) if distance is not None else None
-        item['display_status'],item['status_note']=static_status(item);rows.append(public_directory_record(item))
+        item['display_status'],item['status_note']=static_status(item)
+        if item['display_status']!='CREDENTIAL VERIFIED':continue
+        rows.append(public_directory_record(item))
     rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
     return rows,bool(origin)
 
@@ -744,6 +746,7 @@ def search_db(zipcode,q='',radius=25):
             rows=[]
             for raw in cur.fetchall():
                 item=rowdict(keys,raw);label,note=status_for(item);item['display_status']=label;item['status_note']=note
+                if label!='CREDENTIAL VERIFIED':continue
                 if item['distance'] is not None:item['distance']=round(float(item['distance']),1)
                 rows.append(item)
             fallback,fallback_geo=search_static(zipcode,q,radius)
