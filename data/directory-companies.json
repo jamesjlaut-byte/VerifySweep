@@ -276,7 +276,11 @@
       "service_area_source_url": "https://hillcountrysweeps.com/",
       "captured_at": "2026-09-02T18:00:00Z",
       "source_note": "The business website publishes Spring Branch as a location and lists the included Central Texas cities as service areas. A service-area match is not presented as a physical office.",
-      "history_note": "The company website publishes service locations for Austin, Spring Branch, and San Antonio."
+      "history_note": "The company website publishes service locations for Austin, Spring Branch, and San Antonio.",
+      "public_status": "verified",
+      "verification_scope": "business_identity_and_published_service_areas",
+      "verification_note": "VerifySweep checked the company name, public website, business phone, and published service areas against the company-controlled website. This status does not rate workmanship and does not apply an individual credential to every employee.",
+      "last_checked_at": "2026-09-02T20:10:00-05:00"
     },
     {
       "company": "Black Velvet Chimney",

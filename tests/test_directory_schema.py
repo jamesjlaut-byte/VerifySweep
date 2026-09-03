@@ -106,7 +106,7 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertGreaterEqual(len(rows), 7)
         self.assertTrue(all(row['state'] == 'TX' for row in rows))
         self.assertTrue(any(row['company'].startswith('Hill Country') for row in rows))
-        self.assertTrue(all(row['display_status'] == 'UNVERIFIED' for row in rows))
+        self.assertTrue(all(row['display_status'] in {'UNVERIFIED', 'BUSINESS IDENTITY VERIFIED'} for row in rows))
         self.assertTrue(all(row.get('source_url') or row.get('sources') for row in rows))
 
     def test_company_discovery_does_not_create_professional_credentials(self):
@@ -127,7 +127,9 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertEqual(hill_country['city'], 'Spring Branch')
         self.assertEqual(hill_country['matched_service_area'], 'Austin')
         self.assertIn('San Antonio', hill_country['service_areas'])
-        self.assertEqual(hill_country['display_status'], 'UNVERIFIED')
+        self.assertEqual(hill_country['display_status'], 'BUSINESS IDENTITY VERIFIED')
+        self.assertEqual(hill_country['public_status'], 'verified')
+        self.assertEqual(hill_country['verification_scope'], 'business_identity_and_published_service_areas')
 
     def test_black_velvet_service_area_and_named_credential_stay_separate(self):
         rows = DIRECTORY.search_static_companies(city='Fort Worth', state='TX')

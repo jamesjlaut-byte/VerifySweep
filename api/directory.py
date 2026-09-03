@@ -17,7 +17,7 @@ PUBLIC_COMPANY_STATUSES=('unverified','verification_in_progress','verified','inf
 COMPANY_STATUS_LABELS={
   'unverified':'UNVERIFIED',
   'verification_in_progress':'VERIFICATION IN PROGRESS',
-  'verified':'VERIFIED',
+  'verified':'BUSINESS IDENTITY VERIFIED',
   'information_updated':'INFORMATION UPDATED / VERIFICATION NEEDED'
 }
 OFFICIAL_SOURCES={
@@ -339,22 +339,27 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         item=groups.setdefault(key,{
           'id':clean(source.get('id'),160) or 'reviewed-company-'+re.sub(r'[^a-z0-9]+','-',company.lower()).strip('-')+'-'+company_zip,
           'company':company,'website':clean(source.get('website'),1000),'phone':clean(source.get('phone'),80),
-          'city':company_city,'state':company_state,'zip':company_zip,'public_status':'unverified','claim_status':'unclaimed',
+          'city':company_city,'state':company_state,'zip':company_zip,'public_status':clean(source.get('public_status'),60).lower() or 'unverified','claim_status':'unclaimed',
           'last_reviewed_at':clean(source.get('last_checked_at') or source.get('captured_at'),40) or None,'verification_due_at':None,
           'source_type':clean(source.get('source_type'),80) or 'directory_research_record','source_url':clean(source.get('source_url') or source.get('source') or next((v.get('url') for v in source.get('sources') or [] if isinstance(v,dict) and v.get('url')),''),1000),
           'service_areas':service_areas,'service_locations':service_locations,'service_area_labels':[location['city']+', '+location['state'] if location['state'] else location['city'] for location in service_locations],
           'service_counties':service_counties,'service_area_source_url':clean(source.get('service_area_source_url'),1000),
           'history_note':clean(source.get('history_note'),500),'recognition_source_url':clean(source.get('recognition_source_url'),1000),
-          'display_status':'UNVERIFIED',
+          'display_status':company_status_label(source.get('public_status') or 'unverified'),
           'company_claims':source.get('company_claims') or [],'professional_candidates':source.get('professional_candidates') or [],
           'sources':source.get('sources') or [],'reviewed_professional_names':reviewed_people,
-          'verified_professional_count':len(reviewed_people)
+          'verified_professional_count':len(reviewed_people),'verification_scope':clean(source.get('verification_scope'),120),
+          'verification_note':clean(source.get('verification_note'),600)
         })
         checked=clean(source.get('last_checked_at') or source.get('captured_at'),40)
         if checked and (not item['last_reviewed_at'] or checked>item['last_reviewed_at']):item['last_reviewed_at']=checked
         if not item['website'] and source.get('website'):item['website']=clean(source.get('website'),1000)
         if not item['phone'] and source.get('phone'):item['phone']=clean(source.get('phone'),80)
         if not item['source_url'] and (source.get('source_url') or source.get('source')):item['source_url']=clean(source.get('source_url') or source.get('source'),1000)
+        incoming_status=clean(source.get('public_status'),60).lower()
+        if incoming_status=='verified':item['public_status']='verified';item['display_status']=company_status_label('verified')
+        for field in ('verification_scope','verification_note'):
+            if not item.get(field) and source.get(field):item[field]=clean(source.get(field),600)
         if service_areas:item['service_areas']=sorted(set([*item.get('service_areas',[]),*service_areas]),key=str.lower)
         if service_locations:
             combined={(location['city'].lower(),location['state'].lower()):location for location in [*item.get('service_locations',[]),*service_locations]}
@@ -379,9 +384,9 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         elif starts_company:rank,reason=1,'Company name match'
         elif needle and reviewed_names and all(token in reviewed_names.lower() for token in needle_tokens):rank,reason=2,'Reviewed professional match'
         elif needle and candidate_names and all(token in candidate_names.lower() for token in needle_tokens):rank,reason=3,'Named professional research match'
-        elif city_needle and company_city.lower()==city_needle:rank,reason=4,'Business location match'
+        elif city_needle and company_city.lower()==city_needle:rank,reason=4,'City match'
         elif matched:rank,reason=5,'Published service area match'
-        elif state_needle and company_state.lower()==state_needle:rank,reason=6,'Business state match'
+        elif state_needle and company_state.lower()==state_needle:rank,reason=6,'State match'
         elif needle:rank,reason=7,'Company or directory information match'
         else:rank,reason=8,'Directory match'
         if item.get('match_rank') is None or rank<item['match_rank']:

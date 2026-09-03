@@ -72,7 +72,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
         rows=directory.search_static_companies(city='Austin',state='TX')
         ranks=[row['match_rank'] for row in rows]
         self.assertEqual(ranks,sorted(ranks))
-        self.assertEqual(rows[0]['match_reason'],'Business location match')
+        self.assertEqual(rows[0]['match_reason'],'City match')
 
     def test_reviewed_professional_name_search_uses_reviewed_records(self):
         rows=directory.search_static_companies(q='Pete Pohlman')
