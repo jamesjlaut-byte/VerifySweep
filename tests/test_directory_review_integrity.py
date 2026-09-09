@@ -9,6 +9,18 @@ spec=importlib.util.spec_from_file_location('review_integrity',ROOT/'api/directo
 directory=importlib.util.module_from_spec(spec);spec.loader.exec_module(directory)
 
 class ReviewIntegrityTests(unittest.TestCase):
+    def test_reverification_queue_includes_missing_and_future_verification_dates(self):
+        conn,cur=self.connection(None);cur.fetchall.return_value=[]
+        with patch.object(directory,'dbconn',return_value=conn),patch.object(directory,'ensure'):
+            directory.list_reverification_queue_db()
+        normalized,legacy=cur.execute.call_args.args[0].split('UNION ALL')
+        for sql,prefix,last_checked in [(normalized,'cr.','cr.last_checked_at'),(legacy,'','source_last_checked_at')]:
+            where=sql.split('WHERE')[1]
+            for predicate in [prefix+'verified_at IS NULL',prefix+'verified_at>now()',last_checked+'>now()']:
+                self.assertIn(predicate,where)
+            self.assertIn("THEN 'VERIFICATION DATE REVIEW'",sql)
+        conn.close.assert_called_once()
+
     def connection(self,row):
         connection=MagicMock();cursor=connection.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value=(*row,'123') if row else row

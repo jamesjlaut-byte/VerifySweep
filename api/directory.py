@@ -951,6 +951,7 @@ def list_reverification_queue_db():
                   COALESCE(cr.credential_name,cr.credential_type) AS credential_type,cr.official_source_url,
                   cr.verified_at,cr.last_checked_at,cr.expiration_date,cr.recheck_due_at,
                   CASE WHEN cr.expiration_date<CURRENT_DATE OR cr.credential_status='expired' THEN 'EXPIRED'
+                    WHEN cr.verified_at IS NULL OR cr.verified_at>now() OR cr.last_checked_at>now() THEN 'VERIFICATION DATE REVIEW'
                     WHEN cr.source_available=FALSE OR cr.credential_status='unable_to_verify' THEN 'SOURCE UNAVAILABLE'
                     WHEN cr.credential_status='disputed' THEN 'DISPUTED'
                     ELSE 'REVERIFICATION REQUIRED' END AS review_reason
@@ -959,16 +960,19 @@ def list_reverification_queue_db():
                 LEFT JOIN directory_companies c ON c.id=p.company_id
                 WHERE cr.verification_status='verified_from_official_source'
                   AND (cr.expiration_date<CURRENT_DATE OR cr.recheck_due_at<=now() OR cr.source_available=FALSE
+                    OR cr.verified_at IS NULL OR cr.verified_at>now() OR cr.last_checked_at>now()
                     OR cr.credential_status IN ('expired','reverification_required','unable_to_verify','disputed'))
                 UNION ALL
                 SELECT 'legacy'::text,id::text,id::text,professional_name,company,issuer,
                   COALESCE(credential_type,credential),credential_source,verified_at,source_last_checked_at,
                   expiration_date,recheck_due_at,
                   CASE WHEN expiration_date<CURRENT_DATE THEN 'EXPIRED'
+                    WHEN verified_at IS NULL OR verified_at>now() OR source_last_checked_at>now() THEN 'VERIFICATION DATE REVIEW'
                     WHEN source_available=FALSE THEN 'SOURCE UNAVAILABLE' ELSE 'REVERIFICATION REQUIRED' END
                 FROM pro_directory
                 WHERE status='verified' AND verification_status='verified_from_official_source'
-                  AND (expiration_date<CURRENT_DATE OR recheck_due_at<=now() OR source_available=FALSE)
+                  AND (expiration_date<CURRENT_DATE OR recheck_due_at<=now() OR source_available=FALSE
+                    OR verified_at IS NULL OR verified_at>now() OR source_last_checked_at>now())
               ) due_records
               ORDER BY COALESCE(recheck_due_at,expiration_date::timestamptz) ASC NULLS FIRST,professional_name
               LIMIT 250''')
@@ -1092,7 +1096,7 @@ class handler(BaseHTTPRequestHandler):
                 submissions=list_pending_submissions_db(status,after_id);return self.sendj(200,review_page(submissions,'submissions',status,250),include_private=True)
             if view=='admin_reverification':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
-                records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, or temporarily unverifiable credential records'})
+                records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, temporarily unverifiable, or invalid verification-date credential records'})
             if view=='companies':
                 identifier=clean((qs.get('id') or [''])[0],160)
                 if identifier:
