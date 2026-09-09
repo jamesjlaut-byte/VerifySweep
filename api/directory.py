@@ -276,6 +276,14 @@ def valid_http_url(v):
     try:return urlparse(v).scheme in ('http','https') and bool(urlparse(v).hostname)
     except:return False
 
+def credential_issuer_id(value):
+    """Canonical search key; does not establish credential verification."""
+    key=re.sub(r'[^a-z0-9]','',clean(value,100).lower())
+    return {'ncsgccp':'ncsg'}.get(key,key)
+
+def credential_matches_filters(person,issuer='',credential_type=''):
+    return (not issuer or credential_issuer_id(person.get('issuer'))==credential_issuer_id(issuer)) and (not credential_type or clean(person.get('credential'),200).casefold()==clean(credential_type,200).casefold())
+
 def official_issuer_source(issuer,value):
     domains=OFFICIAL_ISSUER_DOMAINS.get(clean(issuer,100))
     if not domains:return False
@@ -599,7 +607,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         if clean(source.get('id'),160).startswith('national-') and not (source.get('website') or source.get('sources')):continue
         reviewed_professionals=reviewed_professionals_for_company(company,company_city,company_state,company_zip)
         if issuer_needle or credential_needle:
-            reviewed_professionals=[person for person in reviewed_professionals if (not issuer_needle or person['issuer'].lower()==issuer_needle) and (not credential_needle or person['credential'].lower()==credential_needle)]
+            reviewed_professionals=[person for person in reviewed_professionals if credential_matches_filters(person,issuer_needle,credential_needle)]
         if verified_only:
             reviewed_professionals=[person for person in reviewed_professionals if person.get('display_status')=='CREDENTIAL VERIFIED']
         reviewed_people=sorted(set(person['holder'] for person in reviewed_professionals),key=str.lower)
@@ -696,7 +704,7 @@ def company_professionals(company):
         source_zip=clean(source.get('zip'),5);company_zip=clean(company.get('zip'),5)
         same_location=(bool(source_zip) and source_zip==company_zip) or (clean(source.get('city'),120).lower()==clean(company.get('city'),120).lower() and clean(source.get('state'),40).lower()==clean(company.get('state'),40).lower()) or (bool(clean(company.get('state'),40)) and clean(source.get('state'),40).lower()==clean(company.get('state'),40).lower())
         if not (same_name and same_location):continue
-        item={k:source.get(k) for k in ('id','holder','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available')}
+        item={k:source.get(k) for k in ('id','holder','credential','credential_type','credential_number','issuer','source','verified_at','last_checked_at','expiration_date','recheck_due_at','source_available','identity_status','company_affiliation_status')}
         item['display_status'],item['status_note']=static_status(source);rows.append(item)
     return sorted(rows,key=lambda item:(clean(item.get('holder'),200),clean(item.get('credential'),200)))
 
@@ -755,7 +763,7 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
                 item=rowdict(keys,raw);item['display_status']=company_status_label(item.get('public_status'))
                 item['reviewed_professionals']=reviewed_professionals_for_company(item['company'],clean(item.get('city'),120),clean(item.get('state'),40),clean(item.get('zip'),5))
                 if issuer or credential_type:
-                    item['reviewed_professionals']=[person for person in item['reviewed_professionals'] if (not issuer or person['issuer'].lower()==issuer.lower()) and (not credential_type or person['credential'].lower()==credential_type.lower())]
+                    item['reviewed_professionals']=[person for person in item['reviewed_professionals'] if credential_matches_filters(person,issuer,credential_type)]
                 if verified_only:
                     item['reviewed_professionals']=[person for person in item['reviewed_professionals'] if person.get('display_status')=='CREDENTIAL VERIFIED']
                 item['reviewed_professional_names']=sorted(set(person['holder'] for person in item['reviewed_professionals']),key=str.lower)
@@ -1049,9 +1057,9 @@ class handler(BaseHTTPRequestHandler):
                 if identifier:
                     result,connected=detail_company(identifier)
                     return self.sendj(200 if result else 404,{'result':result,'database_connected':connected,'public_business_fields_only':True} if result else {'error':'Company record not found.'})
-                z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40);verified_only=clean((qs.get('verified') or [''])[0],5) in ('1','true','yes');issuer=clean((qs.get('issuer') or [''])[0],100);credential_type=clean((qs.get('credential_type') or [''])[0],200)
+                z=(qs.get('zip') or [''])[0].strip();q=clean((qs.get('q') or [''])[0],120);city=clean((qs.get('city') or [''])[0],120);state=clean((qs.get('state') or [''])[0],40);verified_only=clean((qs.get('verified') or [''])[0],5) in ('1','true','yes');issuer=clean((qs.get('issuer') or [''])[0],100);credential_type=clean((qs.get('credential_type') or [''])[0],200)
                 try:radius=int((qs.get('radius') or ['25'])[0])
-                except:radius=25
+                except (ValueError,TypeError):return self.sendj(400,{'error':'Choose a supported search radius.'})
                 if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
                 if radius not in ALLOWED_RADII:return self.sendj(400,{'error':'Choose a supported search radius.'})
                 if not any((z,q,city,state,verified_only,issuer,credential_type)):return self.sendj(400,{'error':'Search by ZIP, city, state, business name, professional name, or reviewed credential record.'})
@@ -1061,7 +1069,7 @@ class handler(BaseHTTPRequestHandler):
                     nearby,nearby_connected=search_companies_db('',q,resolved['city'],resolved['state'],verified_only,radius,issuer,credential_type)
                     existing={company_key(item) for item in results}
                     results.extend(item for item in nearby if company_key(item) not in existing)
-                    results.sort(key=lambda item:(0 if item.get('matched_service_area') else 1,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower()))
+                    results.sort(key=company_trust_key)
                     connected=connected or nearby_connected
                 return self.sendj(200,{'results':results,'count':len(results),'database_connected':connected,'public_business_fields_only':True,
                   'resolved_location':resolved,'radius':radius,'distance_search_available':bool(z and zip_centroids().get(z)),
@@ -1072,9 +1080,9 @@ class handler(BaseHTTPRequestHandler):
             if identifier:
                 if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',identifier):return self.sendj(400,{'error':'Invalid professional record.'})
                 result=detail_db(int(identifier)) if identifier.isdigit() else detail_static(identifier);return self.sendj(200 if result else 404,{'result':result} if result else {'error':'Professional record not found.'})
-            z=clean((qs.get('zip') or [''])[0],5);q=clean((qs.get('q') or [''])[0],120)
+            z=(qs.get('zip') or [''])[0].strip();q=clean((qs.get('q') or [''])[0],120)
             try:radius=int((qs.get('radius') or ['25'])[0])
-            except:radius=25
+            except (ValueError,TypeError):return self.sendj(400,{'error':'Choose a supported search radius.'})
             if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
             if radius not in ALLOWED_RADII:return self.sendj(400,{'error':'Choose a supported search radius.'})
             results,geo=search_db(z,q,radius)

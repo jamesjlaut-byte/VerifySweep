@@ -10,6 +10,18 @@ directory=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(director
 
 
 class UnifiedDirectoryTests(unittest.TestCase):
+    def test_find_a_pro_keeps_company_distance_attached_to_company_cards(self):
+        page=(ROOT/'find-a-pro.html').read_text()
+        self.assertIn("'result company-result'",page)
+        self.assertIn("'result professional-result personResult'",page)
+        self.assertIn("querySelectorAll(':scope > .company-result')",page)
+        self.assertNotIn("document.querySelectorAll('.result').forEach",page)
+
+    def test_find_a_pro_mobile_status_css_uses_valid_media_query(self):
+        page=(ROOT/'find-a-pro.html').read_text()
+        self.assertNotIn('}(max-width:600px){',page)
+        self.assertIn('@media(max-width:600px){.statusGrid',page)
+
     def test_date_only_credential_dates_do_not_crash_status_checks(self):
         base={'verification_status':'verified_from_official_source','verified_at':'2026-01-01','recheck_due_at':'2099-01-01'}
         self.assertEqual(directory.static_status({**base,'expiration_date':'2000-01-01'})[0],'EXPIRED')
@@ -327,11 +339,11 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('@media(max-width:600px){.statusGrid',search)
         self.assertIn("^[A-Za-z0-9_-]{1,80}$",profile)
         self.assertIn("'VERIFY WITH ISSUER'",profile)
-        self.assertIn("'ADDITIONAL VERIFICATION'",profile)
+        self.assertIn("'VERIFICATION STATUS'",profile)
         self.assertIn('Credential holder:',profile)
         self.assertIn('Expiration:',profile)
         self.assertIn('Review due:',profile)
-        self.assertIn("value!=='UNKNOWN'",profile)
+        self.assertIn("'NOT YET REVIEWED'",profile)
         self.assertIn("'LISTED COMPANY'",profile)
         self.assertIn("value.textContent.trim()==='UNKNOWN'",search)
         self.assertIn("'Listed company: '+companyLine.textContent",search)
