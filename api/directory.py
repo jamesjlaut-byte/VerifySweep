@@ -1095,6 +1095,7 @@ class handler(BaseHTTPRequestHandler):
             n=int(self.headers.get('Content-Length','0'))
             if n<2 or n>30000:raise ValueError('Invalid request.')
             p=json.loads(self.rfile.read(n).decode());required=['company','professional_name','credential','issuer','credential_source','postal_code','submitter_email']
+            if not isinstance(p,dict):raise ValueError('Send a JSON object with the submission fields.')
             if clean(p.get('action'),40)=='claim_profile':
                 if clean(p.get('website'),200):raise ValueError('Invalid request.')
                 if clean(p.get('target_type'),20) not in ('company','professional'):raise ValueError('Choose a valid record type.')
@@ -1144,10 +1145,13 @@ class handler(BaseHTTPRequestHandler):
                 if clean(p.get('website'),200):raise ValueError('Invalid request.')
                 if clean(p.get('target_type'),20) not in ('company','professional'):raise ValueError('Choose a valid record type.')
                 if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}',clean(p.get('target_id'),160)):raise ValueError('Choose a valid directory record.')
+                if not directory_target_exists(clean(p.get('target_type'),20),clean(p.get('target_id'),160)):raise ValueError('Directory profile not found.')
                 if clean(p.get('reason'),60) not in REPORT_REASONS:raise ValueError('Choose a valid report reason.')
                 if len(clean(p.get('details'),3000))<10:raise ValueError('Please provide enough detail for review.')
                 if clean(p.get('source_url')) and not valid_http_url(clean(p.get('source_url'),1000)):raise ValueError('Use a valid public source URL.')
-                rid=report_problem_db(p);return self.sendj(201,{'id':rid,'status':'pending','message':'Report received for human review. No listing or verification status changes automatically.'})
+                email=clean(p.get('reporter_email'),320)
+                if email and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise ValueError('Enter a valid email address or leave it blank.')
+                rid=report_problem_db(p);return self.sendj(201,{'id':rid,'report_reference':'VS-REPORT-'+str(rid),'status':'pending','email_notification':'not_enabled','message':'Report saved for human review. No automatic email has been sent. Save your report reference. No listing or verification status changes automatically.'})
             if any(not clean(p.get(k)) for k in required):raise ValueError('Company, professional name, credential, issuer, verification source, ZIP, and contact email are required.')
             if not valid_zip(clean(p.get('postal_code'),5)):raise ValueError('Enter a valid 5-digit ZIP code.')
             if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',clean(p.get('submitter_email'),320)):raise ValueError('Enter a valid contact email address.')
