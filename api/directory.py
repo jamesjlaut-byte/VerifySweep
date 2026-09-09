@@ -370,7 +370,9 @@ def static_status(item):
     expiration_value=item.get('expiration_date') or item.get('expires_at')
     expires=parse_directory_date(expiration_value)
     if expiration_value and expires is None:return ('REVERIFICATION REQUIRED','The recorded expiration date is invalid and requires review at the official source.')
-    if expires and expires < datetime.now(timezone.utc):return ('EXPIRED','The recorded credential expiration date has passed. Check the issuer for current status.')
+    now=datetime.now(timezone.utc)
+    expired=expires and (expires.date()<now.date() if re.fullmatch(r'\d{4}-\d{2}-\d{2}',str(expiration_value)) else expires<now)
+    if expired:return ('EXPIRED','The recorded credential expiration date has passed. Check the issuer for current status.')
     due=clean(item.get('recheck_due_at'),40)
     parsed_due=parse_directory_date(due)
     is_stale=bool(due) and (parsed_due is None or parsed_due < datetime.now(timezone.utc))
@@ -784,6 +786,10 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
             return rows,True
     finally:conn.close()
 
+def credential_record_key(record):
+    # A shared issuer directory URL is not a unique individual credential.
+    return tuple(clean(record.get(k),200).casefold() for k in ('holder','company','issuer'))+(clean(record.get('credential_type') or record.get('credential'),200).casefold(),)
+
 def search_db(zipcode,q='',radius=25):
     conn=dbconn()
     if not conn:return search_static(zipcode,q,radius)
@@ -809,18 +815,18 @@ def search_db(zipcode,q='',radius=25):
                 where.append('(postal_code=%s OR %s=ANY(service_zips))');params.extend([zipcode,zipcode])
             cur.execute(f'''SELECT id,company,professional_name,credential,COALESCE(credential_type,credential),issuer,
               credential_source,city,state,postal_code,website,phone,verification_status,verified_at,
-              source_last_checked_at,recheck_due_at,source_available,source_note,identity_status,company_affiliation_status,{distance_sql} AS distance
+              source_last_checked_at,recheck_due_at,source_available,source_note,identity_status,company_affiliation_status,{distance_sql} AS distance,credential_number,expiration_date
               FROM pro_directory WHERE {' AND '.join(where)} ORDER BY professional_name,company,credential LIMIT 100''',params)
-            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance']
-            rows=[]
+            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance','credential_number','expiration_date']
+            rows=[];seen=set()
             for raw in cur.fetchall():
                 item=rowdict(keys,raw);label,note=status_for(item);item['display_status']=label;item['status_note']=note
+                seen.add(credential_record_key(item))
                 if label!='CREDENTIAL VERIFIED':continue
                 if item['distance'] is not None:item['distance']=round(float(item['distance']),1)
                 rows.append(item)
             fallback,fallback_geo=search_static(zipcode,q,radius)
-            seen={(clean(r.get('issuer'),80).lower(),clean(r.get('source'),1000).lower()) for r in rows}
-            rows.extend(r for r in fallback if (clean(r.get('issuer'),80).lower(),clean(r.get('source'),1000).lower()) not in seen)
+            rows.extend(r for r in fallback if credential_record_key(r) not in seen)
             rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
             return rows,bool(origin) or fallback_geo
     finally:conn.close()
@@ -833,14 +839,14 @@ def detail_db(identifier):
         with conn.cursor() as cur:
             cur.execute('''SELECT id,company,professional_name,credential,COALESCE(credential_type,credential),issuer,
               credential_source,city,state,postal_code,website,phone,verification_status,verified_at,
-              source_last_checked_at,recheck_due_at,source_available,source_note,identity_status,company_affiliation_status,NULL::double precision
+              source_last_checked_at,recheck_due_at,source_available,source_note,identity_status,company_affiliation_status,NULL::double precision,credential_number,expiration_date
               FROM pro_directory WHERE id=%s AND status=%s''',(identifier,PUBLISHED_STATUS));raw=cur.fetchone()
             if not raw:return detail_static(identifier)
-            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance']
+            keys=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance','credential_number','expiration_date']
             item=rowdict(keys,raw);item['display_status'],item['status_note']=status_for(item)
             item['identity_status']=clean(item.get('identity_status'),60).upper() or 'UNKNOWN'
             item['company_affiliation_status']=clean(item.get('company_affiliation_status'),60).upper() or 'UNKNOWN'
-            item['credentials']=[{k:item.get(k) for k in ('id','credential','credential_type','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note','display_status','status_note')}]
+            item['credentials']=[{k:item.get(k) for k in ('id','credential','credential_type','credential_number','expiration_date','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note','display_status','status_note')}]
             return item
     finally:conn.close()
 
