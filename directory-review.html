@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Directory Review — Restricted | VerifySweep</title>
+<link rel="stylesheet" href="/assets/directory-review.css">
+</head><body>
+<header><a href="/"><img src="/VerifySweep-Official-Logo-Black.png" alt="VerifySweep"></a></header>
+<main>
+<p class="ey">AUTHORIZED REVIEWERS ONLY</p><h1>Directory Review</h1>
+<p>Review submitted information without turning claims into verified facts. Private contact details and review notes must stay private.</p>
+<form id="access" class="card" autocomplete="off">
+<label for="token">Existing directory admin token</label><input id="token" type="password" required autocomplete="off" maxlength="1900">
+<label for="reviewer">Reviewer name (recorded in the audit trail)</label><input id="reviewer" required maxlength="120" autocomplete="off">
+<p>The existing server-side admin authorization is required. The token is kept only in this page’s memory, never in browser storage or a URL. Do not paste it into chat.</p>
+<button type="submit">OPEN REVIEW QUEUES</button>
+</form>
+<section id="workspace" hidden>
+<div class="controls"><label for="queue">Queue<select id="queue"><option value="claims">Profile claims</option><option value="reports">Corrections</option><option value="submissions">Credential submissions</option><option value="reverification">Reverification due</option></select></label>
+<label for="status">Status<select id="status"></select></label><button id="refresh" type="button">REFRESH</button><button id="lock" type="button">LOCK &amp; CLEAR</button></div>
+<p class="notice">Saving a review status does not grant account access, edit a public listing, verify a credential, or send an email. Make any factual correction through a separately reviewed update. Mark a correction resolved only after that update is complete.</p>
+<p id="count"></p><div id="records"></div>
+</section>
+<p id="message" role="status" tabindex="-1"></p>
+<p><a href="/find-a-pro.html">Return to the public directory</a></p>
+</main><script src="/assets/directory-review.js"></script></body></html>
