@@ -9,6 +9,28 @@ directory=importlib.util.module_from_spec(spec);spec.loader.exec_module(director
 KEYS=['id','company','holder','credential','credential_type','issuer','source','city','state','zip','website','phone','verification_status','verified_at','last_checked_at','recheck_due_at','source_available','source_note','identity_status','company_affiliation_status','distance','credential_number','expiration_date']
 
 class PublicFreshnessTests(unittest.TestCase):
+    def test_incomplete_or_future_verification_dates_require_review(self):
+        for value in [None,'','not-a-date','2099-01-01','2026-02-30']:
+            with self.subTest(value=value):
+                record=self.record(expiration_date=None,verified_at=value)
+                self.assertEqual(directory.static_status(record)[0],'REVERIFICATION REQUIRED')
+
+    def test_invalid_source_check_chronology_requires_review(self):
+        for value in ['not-a-date','2099-01-01']:
+            with self.subTest(value=value):
+                record=self.record(expiration_date=None,last_checked_at=value)
+                self.assertEqual(directory.static_status(record)[0],'REVERIFICATION REQUIRED')
+        for value in [None,'2025-12-31','2026-01-01','2026-02-01']:
+            self.assertEqual(directory.static_status(self.record(expiration_date=None,last_checked_at=value))[0],'CREDENTIAL VERIFIED')
+
+    def test_bad_verification_date_excluded_from_search_but_profile_retained(self):
+        record=self.record(expiration_date=None,verified_at='not-a-date');conn,_=self.connection(record)
+        with patch.object(directory,'dbconn',return_value=conn),patch.object(directory,'ensure'),patch.object(directory,'search_static',return_value=([],False)):
+            rows,_=directory.search_db('')
+            profile=directory.detail_db(1)
+        self.assertEqual(rows,[])
+        self.assertEqual(profile['display_status'],'REVERIFICATION REQUIRED')
+
     def record(self,**changes):
         record=dict(id=1,company='Test Company',holder='Test Person',credential='Sweep',credential_type='Sweep',issuer='CSIA',source='https://web.csia.org/CSIA-Certified',verification_status='verified_from_official_source',verified_at='2026-01-01',recheck_due_at='2099-01-01',source_available=True,credential_number='TEST-123',expiration_date=date(2000,1,1))
         record.update(changes);return record

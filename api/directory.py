@@ -377,7 +377,14 @@ def static_status(item):
     parsed_due=parse_directory_date(due)
     is_stale=bool(due) and (parsed_due is None or parsed_due < datetime.now(timezone.utc))
     if is_stale or configured=='reverification_required':return ('REVERIFICATION REQUIRED','The prior verification is stale and should be checked again at the official source.')
-    if configured in ('verified','verified_from_official_source') and item.get('verified_at'):
+    if configured in ('verified','verified_from_official_source'):
+        verified=parse_directory_date(item.get('verified_at'))
+        if verified is None or verified>now:
+            return ('REVERIFICATION REQUIRED','A valid completed verification date is required before this credential can be presented as verified.')
+        checked_value=item.get('last_checked_at')
+        checked=parse_directory_date(checked_value)
+        if checked_value and (checked is None or checked>now):
+            return ('REVERIFICATION REQUIRED','The recorded source-check date requires review before this credential can be presented as verified.')
         return ('CREDENTIAL VERIFIED','The individual credential was checked against the linked official source.')
     if configured=='unable_to_verify':return ('UNABLE TO VERIFY','VerifySweep could not confirm this credential from the available authoritative source.')
     return ('VERIFICATION NEEDED','This record requires an updated official-source verification.')
@@ -751,6 +758,8 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
               WHERE p.company_id=c.id AND p.public_state='active'
               AND cr.verification_status='verified_from_official_source'
               AND cr.verified_at IS NOT NULL AND cr.source_available=TRUE
+              AND cr.verified_at<=now()
+              AND (cr.last_checked_at IS NULL OR cr.last_checked_at<=now())
               AND (cr.expiration_date IS NULL OR cr.expiration_date>=CURRENT_DATE)
               AND (cr.recheck_due_at IS NULL OR cr.recheck_due_at>now())
               AND COALESCE(cr.credential_status,'pending_verification') NOT IN ('expired','reverification_required','unable_to_verify','disputed','archived'))''')
