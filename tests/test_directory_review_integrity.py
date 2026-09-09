@@ -11,7 +11,7 @@ directory=importlib.util.module_from_spec(spec);spec.loader.exec_module(director
 class ReviewIntegrityTests(unittest.TestCase):
     def connection(self,row):
         connection=MagicMock();cursor=connection.cursor.return_value.__enter__.return_value
-        cursor.fetchone.return_value=row
+        cursor.fetchone.return_value=(*row,'123') if row else row
         return connection,cursor
 
     def test_triage_cannot_demote_verified_records(self):
@@ -20,14 +20,14 @@ class ReviewIntegrityTests(unittest.TestCase):
                 conn,cur=self.connection(row)
                 with patch.object(directory,'dbconn',return_value=conn),patch.object(directory,'ensure'):
                     with self.assertRaisesRegex(ValueError,'separate credential correction'):
-                        directory.review_credential_submission_db(1,'rejected','Reviewer','Test note')
+                        directory.review_credential_submission_db(1,'rejected','Reviewer','Test note','123')
                 self.assertEqual(cur.execute.call_count,1)
                 conn.commit.assert_not_called();conn.close.assert_called_once()
 
     def test_triage_preserves_actual_verification_state_in_response_and_audit(self):
         conn,cur=self.connection(('pending','verification_in_progress'))
         with patch.object(directory,'dbconn',return_value=conn),patch.object(directory,'ensure'):
-            result=directory.review_credential_submission_db(1,'needs_evidence','Reviewer','Request more evidence')
+            result=directory.review_credential_submission_db(1,'needs_evidence','Reviewer','Request more evidence','123')
         self.assertEqual(result['verification_status'],'verification_in_progress')
         params=cur.execute.call_args.args[1]
         before,after=json.loads(params[2]),json.loads(params[3])

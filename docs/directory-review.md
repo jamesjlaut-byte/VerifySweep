@@ -6,6 +6,8 @@ The page loads private records only after the server accepts authorization. It h
 
 ## What review decisions do
 
+Review saves require the `review_version` returned by the private queue. The server checks this against the current row version while holding a row lock. If it changed, HTTP 409 is returned without saving the decision or its audit event. The page preserves the draft note; copy it if needed, then refresh and reassess the current record before saving. Old clients missing the version must refresh/update rather than bypass this check. The version is an opaque concurrency marker, not an authorization credential.
+
 - Claims: record pending evidence, approval, rejection, or withdrawal. Approval alone does **not** provision a user account, grant profile editing, establish employment, or verify credentials.
 - Corrections: record reviewing/resolved/dismissed. Apply and verify a legitimate factual correction separately before marking it resolved. This screen never automatically deletes listings.
 - Credential submissions: organize the evidence-review workflow. Ready for verification is not a verified credential. Official-source verification remains a separate authorized operation.
