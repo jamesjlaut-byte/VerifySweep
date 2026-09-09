@@ -948,11 +948,12 @@ def list_reverification_queue_db():
                 UNION ALL
                 SELECT 'legacy'::text,id::text,id::text,professional_name,company,issuer,
                   COALESCE(credential_type,credential),credential_source,verified_at,source_last_checked_at,
-                  NULL::date,recheck_due_at,
-                  CASE WHEN source_available=FALSE THEN 'SOURCE UNAVAILABLE' ELSE 'REVERIFICATION REQUIRED' END
+                  expiration_date,recheck_due_at,
+                  CASE WHEN expiration_date<CURRENT_DATE THEN 'EXPIRED'
+                    WHEN source_available=FALSE THEN 'SOURCE UNAVAILABLE' ELSE 'REVERIFICATION REQUIRED' END
                 FROM pro_directory
                 WHERE status='verified' AND verification_status='verified_from_official_source'
-                  AND (recheck_due_at<=now() OR source_available=FALSE)
+                  AND (expiration_date<CURRENT_DATE OR recheck_due_at<=now() OR source_available=FALSE)
               ) due_records
               ORDER BY COALESCE(recheck_due_at,expiration_date::timestamptz) ASC NULLS FIRST,professional_name
               LIMIT 250''')
@@ -981,13 +982,15 @@ def review_credential_submission_db(submission_id,status,reviewer,note):
     try:
         ensure(conn)
         with conn.cursor() as cur:
-            cur.execute('SELECT status FROM pro_directory WHERE id=%s FOR UPDATE',(submission_id,));row=cur.fetchone()
+            cur.execute('SELECT status,verification_status FROM pro_directory WHERE id=%s FOR UPDATE',(submission_id,));row=cur.fetchone()
             if not row:raise ValueError('Credential submission not found.')
-            old_status=row[0]
+            old_status,verification_status=row
+            if old_status=='verified' or verification_status=='verified_from_official_source':
+                raise ValueError('Verified records require a separate credential correction or reverification review, not submission triage.')
             cur.execute('''UPDATE pro_directory SET status=%s,reviewed_by=%s,review_note=%s,reviewed_at=now(),updated_at=now() WHERE id=%s''',(status,reviewer,note,submission_id))
             cur.execute('''INSERT INTO directory_audit_log(actor_id,action,target_type,target_id,old_value,new_value,reason)
-              VALUES(%s,'review_credential_submission','credential_submission',%s,%s::jsonb,%s::jsonb,%s)''',(reviewer,str(submission_id),json.dumps({'status':old_status}),json.dumps({'status':status,'verification_status':'verification_needed'}),note))
-        conn.commit();return {'id':submission_id,'status':status,'verification_status':'verification_needed'}
+              VALUES(%s,'review_credential_submission','credential_submission',%s,%s::jsonb,%s::jsonb,%s)''',(reviewer,str(submission_id),json.dumps({'status':old_status,'verification_status':verification_status}),json.dumps({'status':status,'verification_status':verification_status}),note))
+        conn.commit();return {'id':submission_id,'status':status,'verification_status':verification_status}
     finally:conn.close()
 
 def verify_credential_submission_db(submission_id,reviewer,note):

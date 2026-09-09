@@ -150,7 +150,7 @@ class DirectorySchemaTests(unittest.TestCase):
         self.assertIn("'verification_changed':False",source)
         self.assertIn("clean(p.get('action'),40)=='review_credential_submission'",source)
         self.assertIn("'review_credential_submission'",source)
-        self.assertIn("'verification_status':'verification_needed'",source)
+        self.assertIn("'verification_status':verification_status",source)
         self.assertIn("'ready_for_verification'",source)
         self.assertIn('reviewed_at TIMESTAMPTZ',source)
 
