@@ -860,7 +860,7 @@ def submit_db(p):
         conn.commit();return rid
     finally:conn.close()
 
-def list_pending_submissions_db(status='pending'):
+def list_pending_submissions_db(status='pending',after_id=0):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
     try:
@@ -868,7 +868,7 @@ def list_pending_submissions_db(status='pending'):
         with conn.cursor() as cur:
             cur.execute('''SELECT id,company,professional_name,credential,credential_type,credential_number,expiration_date,issuer,
               credential_source,city,state,postal_code,website,phone,submitter_email_private,submission_notes_private,status,created_at,reviewed_by,review_note,reviewed_at
-              FROM pro_directory WHERE status=%s ORDER BY created_at ASC LIMIT 250''',(status,))
+              FROM pro_directory WHERE status=%s AND id>%s ORDER BY id ASC LIMIT 251''',(status,after_id))
             keys=['id','company','professional_name','credential','credential_type','credential_number','expiration_date','issuer','credential_source','city','state','postal_code','website','phone','submitter_email_private','submission_notes_private','status','created_at','reviewed_by','review_note','reviewed_at']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
@@ -898,26 +898,26 @@ def submit_profile_claim_db(p):
         conn.commit();return rid
     finally:conn.close()
 
-def list_profile_claims_db(status='pending'):
+def list_profile_claims_db(status='pending',after_id=0):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
     try:
         ensure(conn)
         with conn.cursor() as cur:
             cur.execute('''SELECT id,target_type,target_id,claimant_name,claimant_email_private,business_phone_private,evidence_url_private,details,review_status,created_at,updated_at,reviewed_by,review_note,reviewed_at
-              FROM directory_profile_claim_requests WHERE review_status=%s ORDER BY created_at ASC LIMIT 200''',(status,))
+              FROM directory_profile_claim_requests WHERE review_status=%s AND id>%s ORDER BY id ASC LIMIT 201''',(status,after_id))
             keys=['id','target_type','target_id','claimant_name','claimant_email_private','business_phone_private','evidence_url_private','details','review_status','created_at','updated_at','reviewed_by','review_note','reviewed_at']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
-def list_reports_db(status='pending'):
+def list_reports_db(status='pending',after_id=0):
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
     try:
         ensure(conn)
         with conn.cursor() as cur:
             cur.execute('''SELECT id,target_type,target_id,reason,details,source_url,reporter_email_private,review_status,created_at,reviewed_by,review_note,updated_at
-              FROM directory_reports WHERE review_status=%s ORDER BY created_at ASC LIMIT 200''',(status,))
+              FROM directory_reports WHERE review_status=%s AND id>%s ORDER BY id ASC LIMIT 201''',(status,after_id))
             keys=['id','target_type','target_id','reason','details','source_url','reporter_email_private','review_status','created_at','reviewed_by','review_note','updated_at']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
@@ -1030,6 +1030,11 @@ def review_report_db(report_id,status,reviewer,note):
         conn.commit();return {'id':report_id,'review_status':status}
     finally:conn.close()
 
+def review_page(rows,key,status,limit):
+    page=rows[:limit]
+    return {key:page,'count':len(page),'status':status,
+      'next_cursor':str(page[-1]['id']) if len(rows)>limit and page else None}
+
 class handler(BaseHTTPRequestHandler):
     def sendj(self,code,p,include_private=False):
         b=json.dumps(p if include_private else public_directory_record(p),default=str).encode();self.send_response(code);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(b)));self.end_headers();self.wfile.write(b)
@@ -1037,21 +1042,27 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             qs=parse_qs(urlparse(self.path).query);view=clean((qs.get('view') or ['professionals'])[0],30).lower()
+            if view in ('admin_reports','admin_claims','admin_submissions'):
+                if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
+                cursor=(qs.get('after') or ['0'])[0]
+                if not re.fullmatch(r'\d{1,19}',cursor) or int(cursor)>9223372036854775807:
+                    return self.sendj(400,{'error':'Choose a valid review page.'})
+                after_id=int(cursor)
             if view=='admin_reports':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 status=clean((qs.get('status') or ['pending'])[0],20)
                 if status not in ('pending','reviewing','resolved','dismissed'):return self.sendj(400,{'error':'Choose a valid report status.'})
-                reports=list_reports_db(status);return self.sendj(200,{'reports':reports,'count':len(reports),'status':status},include_private=True)
+                reports=list_reports_db(status,after_id);return self.sendj(200,review_page(reports,'reports',status,200),include_private=True)
             if view=='admin_claims':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 status=clean((qs.get('status') or ['pending'])[0],20)
                 if status not in ('pending','needs_evidence','approved','rejected','withdrawn'):return self.sendj(400,{'error':'Choose a valid claim status.'})
-                claims=list_profile_claims_db(status);return self.sendj(200,{'claims':claims,'count':len(claims),'status':status},include_private=True)
+                claims=list_profile_claims_db(status,after_id);return self.sendj(200,review_page(claims,'claims',status,200),include_private=True)
             if view=='admin_submissions':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 status=clean((qs.get('status') or ['pending'])[0],30)
                 if status not in ('pending','reviewing','needs_evidence','ready_for_verification','rejected','withdrawn'):return self.sendj(400,{'error':'Choose a valid submission status.'})
-                submissions=list_pending_submissions_db(status);return self.sendj(200,{'submissions':submissions,'count':len(submissions),'status':status},include_private=True)
+                submissions=list_pending_submissions_db(status,after_id);return self.sendj(200,review_page(submissions,'submissions',status,250),include_private=True)
             if view=='admin_reverification':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
                 records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, or temporarily unverifiable credential records'})

@@ -8,12 +8,13 @@
     reverification: {view:'admin_reverification', key:'records', statuses:[], limit:250}
   };
   let token = '', reviewer = '', generation = 0, loading = false, saving = false;
+  let cursor = '0', nextCursor = null;
   const requests = new Set();
   const el = (tag, text, cls) => {const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
   const label = value => value.replaceAll('_',' ');
   function message(text){$('message').textContent=text;}
-  function busy(value){loading=value;['queue','status','refresh'].forEach(id=>$(id).disabled=value||saving);}
-  function lock(){token='';reviewer='';generation++;requests.forEach(c=>c.abort());requests.clear();$('records').replaceChildren();$('count').textContent='';$('workspace').hidden=true;$('access').hidden=false;$('access').reset();busy(false);message('Review session cleared.');}
+  function busy(value){loading=value;['queue','status','refresh','nextPage','firstPage'].forEach(id=>$(id).disabled=value||saving);}
+  function lock(){cursor='0';nextCursor=null;token='';reviewer='';generation++;requests.forEach(c=>c.abort());requests.clear();$('records').replaceChildren();$('count').textContent='';$('workspace').hidden=true;$('access').hidden=false;$('access').reset();busy(false);message('Review session cleared.');}
   async function request(query, payload){
     const controller=new AbortController();requests.add(controller);const timer=setTimeout(()=>controller.abort(),25000);
     try{
@@ -41,12 +42,13 @@
       finally{saving=false;button.disabled=false;busy(false);}
     });return box;
   }
-  async function load(){if(!token||saving)return;const epoch=++generation,q=queues[$('queue').value];busy(true);$('records').replaceChildren();message('Loading private review queue…');
-    try{const data=await request('?view='+q.view+($('status').value?'&status='+encodeURIComponent($('status').value):''));if(epoch!==generation)return;if(!Array.isArray(data[q.key]))throw new Error('Invalid queue response.');$('workspace').hidden=false;$('access').hidden=true;$('token').value='';$('count').textContent=data[q.key].length+' records shown (up to '+q.limit+' per queue).';$('records').replaceChildren(...data[q.key].map(r=>card(r,q,epoch)));message(data[q.key].length?'Queue loaded. Review source evidence before recording decisions.':'No records in this queue/status.');}
+  async function load(){if(!token||saving)return;const epoch=++generation,q=queues[$('queue').value];busy(true);$('nextPage').hidden=true;$('firstPage').hidden=cursor==='0';$('records').replaceChildren();message('Loading private review queue…');
+    try{const data=await request('?view='+q.view+($('status').value?'&status='+encodeURIComponent($('status').value):'')+'&after='+encodeURIComponent(cursor));if(epoch!==generation)return;if(!Array.isArray(data[q.key]))throw new Error('Invalid queue response.');$('workspace').hidden=false;$('access').hidden=true;$('token').value='';nextCursor=data.next_cursor==null?null:String(data.next_cursor);if(nextCursor&&!/^\d{1,19}$/.test(nextCursor))throw new Error('Invalid next-page reference.');$('nextPage').hidden=!nextCursor;$('count').textContent=data[q.key].length+' records on this page'+(nextCursor?' — more records available.':'.')+(q.action?'':' Reverification is limited to the first 250 due records.');$('records').replaceChildren(...data[q.key].map(r=>card(r,q,epoch)));message(data[q.key].length?'Queue loaded. Review source evidence before recording decisions.':'No records in this queue/status.');}
     catch(error){if(epoch===generation||!token)message(error.message);}
     finally{if(epoch===generation)busy(false);}
   }
   $('access').addEventListener('submit',event=>{event.preventDefault();token=$('token').value.trim();reviewer=$('reviewer').value.trim();if(!token||!reviewer)return;load();});
-  $('queue').addEventListener('change',()=>{configure();load();});$('status').addEventListener('change',load);$('refresh').addEventListener('click',load);$('lock').addEventListener('click',lock);
+  $('queue').addEventListener('change',()=>{cursor='0';configure();load();});$('status').addEventListener('change',()=>{cursor='0';load();});$('refresh').addEventListener('click',load);$('lock').addEventListener('click',lock);
+  $('nextPage').addEventListener('click',()=>{if(nextCursor){cursor=nextCursor;load();}});$('firstPage').addEventListener('click',()=>{cursor='0';load();});
   addEventListener('pagehide',lock);configure();
 })();

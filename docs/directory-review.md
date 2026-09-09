@@ -11,7 +11,7 @@ The page loads private records only after the server accepts authorization. It h
 - Credential submissions: organize the evidence-review workflow. Ready for verification is not a verified credential. Official-source verification remains a separate authorized operation.
 - Reverification: view the existing backend queue of expired/overdue or unavailable records. This queue does not cover every static-source record or provide a complete database migration.
 
-Every saved decision requires a private audit note. If saving times out, refresh the appropriate status queue before retrying. The queues currently show up to 200 claims/corrections or 250 submissions/reverification records; they are not full-history exports.
+Every saved decision requires a private audit note. If saving times out, refresh the appropriate status queue before retrying. Claims/corrections show 200 records per page and submissions show 250. Use Next Page to continue or First Page to restart. Pages are ordered by record ID and use an ID cursor so reviewed records leaving the queue do not shift later pages. Changing queue or status starts at the first page. Refresh reloads the current page; use First Page to see new or reopened earlier records. Reverification remains limited to the first 250 due records; these screens are not full-history exports.
 
 ## Outstanding completion requirements
 
