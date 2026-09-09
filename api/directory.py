@@ -1185,13 +1185,18 @@ class handler(BaseHTTPRequestHandler):
                 if email and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',email):raise ValueError('Enter a valid email address or leave it blank.')
                 rid=report_problem_db(p);return self.sendj(201,{'id':rid,'report_reference':'VS-REPORT-'+str(rid),'status':'pending','email_notification':'not_enabled','message':'Report saved for human review. No automatic email has been sent. Save your report reference. No listing or verification status changes automatically.'})
             if any(not clean(p.get(k)) for k in required):raise ValueError('Company, professional name, credential, issuer, verification source, ZIP, and contact email are required.')
-            if not valid_zip(clean(p.get('postal_code'),5)):raise ValueError('Enter a valid 5-digit ZIP code.')
+            if not valid_zip(str(p.get('postal_code') or '').strip()):raise ValueError('Enter a valid 5-digit ZIP code.')
             if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',clean(p.get('submitter_email'),320)):raise ValueError('Enter a valid contact email address.')
-            if clean(p.get('expiration_date')) and not re.fullmatch(r'\d{4}-\d{2}-\d{2}',clean(p.get('expiration_date'),10)):raise ValueError('Use a valid credential expiration date.')
+            expiration=str(p.get('expiration_date') or '').strip()
+            if expiration:
+                try:
+                    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}',expiration):raise ValueError()
+                    datetime.strptime(expiration,'%Y-%m-%d')
+                except ValueError:raise ValueError('Use a real credential expiration date in YYYY-MM-DD format.')
             if not valid_http_url(clean(p.get('credential_source'),1000)):raise ValueError('Use a valid official-source URL.')
             for field in ('website',):
                 if clean(p.get(field)) and not valid_http_url(clean(p.get(field),1000)):raise ValueError('Use a valid public business website URL.')
-            rid=submit_db(p);self.sendj(201,{'id':rid,'status':'pending','message':'Profile submitted for VerifySweep review. It will not appear in homeowner search until the individual credential is verified.'})
+            rid=submit_db(p);self.sendj(201,{'id':rid,'submission_reference':'VS-CREDENTIAL-'+str(rid),'status':'pending','email_notification':'not_enabled','message':'Credential evidence saved for human review. No automatic email has been sent. Save your reference. This submission is not verification.'})
         except ReviewConflict as e:self.sendj(409,{'error':str(e),'code':'review_conflict'})
         except (ValueError,json.JSONDecodeError) as e:self.sendj(400,{'error':str(e)})
         except RuntimeError as e:self.sendj(503,{'error':str(e)})
