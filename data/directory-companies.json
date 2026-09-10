@@ -4,6 +4,22 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "id": "business-luby-chimney-sweep-monterville-wv",
+      "company": "Luby Chimney Sweep",
+      "website": "https://www.lubychimneysweep.com/",
+      "phone": "304-940-4865",
+      "city": "Monterville",
+      "state": "WV",
+      "postal_code": "26282",
+      "public_status": "unverified",
+      "service_locations": [{"city":"Barbour County","state":"WV"},{"city":"Braxton County","state":"WV"},{"city":"Lewis County","state":"WV"},{"city":"Nicholas County","state":"WV"},{"city":"Pendleton County","state":"WV"},{"city":"Pocahontas County","state":"WV"},{"city":"Randolph County","state":"WV"},{"city":"Tucker County","state":"WV"},{"city":"Upshur County","state":"WV"},{"city":"Webster County","state":"WV"}],
+      "source_type": "official_business_website",
+      "source_url": "https://www.lubychimneysweep.com/",
+      "service_area_source_url": "https://www.lubychimneysweep.com/",
+      "captured_at": "2026-09-10T04:00:00Z",
+      "source_note": "Company-owned website publishes a Monterville, West Virginia business address, phone number, and named county service area. No individual credential has been independently verified for this record."
+    },
+    {
       "id": "business-winstons-chimney-arlington-va-dc",
       "company": "Winston's Chimney Service",
       "website": "https://www.winstonsservices.com/",

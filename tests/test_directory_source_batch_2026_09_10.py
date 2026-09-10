@@ -17,6 +17,7 @@ class DirectorySourceBatchTests(TestCase):
             "business-granite-flue-rapid-city-sd",
             "business-the-chimney-man-jackson-ms",
             "business-winstons-chimney-arlington-va-dc",
+            "business-luby-chimney-sweep-monterville-wv",
         }
         found = {row["id"]: row for row in records if row.get("id") in wanted}
         self.assertEqual(set(found), wanted)
@@ -34,6 +35,7 @@ class DirectorySourceBatchTests(TestCase):
             ("Sturgis, SD", "business-granite-flue-rapid-city-sd", "SD"),
             ("Jackson, MS", "business-the-chimney-man-jackson-ms", "MS"),
             ("Washington, DC", "business-winstons-chimney-arlington-va-dc", "DC"),
+            ("Monterville, WV", "business-luby-chimney-sweep-monterville-wv", "WV"),
         ):
             rows = directory.search_static_companies(q=query)
             self.assertIn(expected_id, {row["id"] for row in rows}, query)
