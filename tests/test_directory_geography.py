@@ -82,6 +82,20 @@ class DirectoryGeographyTests(TestCase):
         with patch.object(d,'dbconn',return_value=None):
             self.assertEqual(d.search_companies_db(city='No Such City',state='NJ')[0],[])
 
+    def test_verified_professional_trust_outweighs_unverified_relevance(self):
+        verified = {
+            'company': 'Verified Sweep', 'match_rank': 5, 'distance': 40,
+            'reviewed_professionals': [{
+                'holder': 'Alex', 'display_status': 'CREDENTIAL VERIFIED',
+                'identity_status': 'VERIFIED', 'company_affiliation_status': 'VERIFIED',
+            }],
+        }
+        unverified = {
+            'company': 'Exact Unverified Sweep', 'match_rank': 0, 'distance': 2,
+            'reviewed_professionals': [],
+        }
+        self.assertLess(d.company_trust_key(verified), d.company_trust_key(unverified))
+
     def test_legacy_professional_search_keeps_state_when_database_unavailable(self):
         person={'holder':'Test','company':'New Jersey Named Company','verification_status':'verified_from_official_source','verified_at':'2026-01-01','recheck_due_at':'2099-01-01'}
         with patch.object(d,'dbconn',return_value=None),patch.object(d,'static_records',return_value=[{**person,'id':'nj','state':'NJ'},{**person,'id':'tx','state':'TX'}]):

@@ -598,10 +598,11 @@ def company_trust_key(item):
     identity_count=len({clean(person.get('holder'),200).casefold() for person in professionals if person.get('holder') and person.get('identity_status')=='VERIFIED'})
     credential_count=len({clean(person.get('holder'),200).casefold() for person in professionals if person.get('holder') and person.get('display_status')=='CREDENTIAL VERIFIED'})
     match_rank=item.get('match_rank',99)
-    # Exact business/professional text matches remain deterministic. For location
-    # discovery, verified professional facts lead and location quality follows.
+    # Trust is the primary directory signal. Relevance and distance break ties,
+    # so an independently verified professional is not buried beneath an
+    # unverified exact-name or nearby company match.
     search_group=match_rank if match_rank<=3 else 4
-    return (search_group,-credential_count,-identity_count,-affiliation_count,match_rank,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower())
+    return (-credential_count,-identity_count,-affiliation_count,search_group,match_rank,item.get('distance') if item.get('distance') is not None else float('inf'),clean(item.get('company'),200).lower())
 
 def add_ranking_explanation(item):
     signals=[]
