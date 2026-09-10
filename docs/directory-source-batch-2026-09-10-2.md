@@ -1,6 +1,6 @@
 # Directory source batch — 2026-09-10
 
-This batch adds two neutral company discovery records to improve location search coverage. It does not create or imply individual credential verification.
+This batch adds three neutral company discovery records to improve location search coverage. It does not create or imply individual credential verification.
 
 ## A Traditional Sweep, LLC — Portsmouth, Rhode Island
 
