@@ -2,13 +2,24 @@
 (() => {
   const ui=window.VerifySweepDirectoryUI,{node:el,safeUrl,anchor}=ui,$=id=>document.getElementById(id);
   const form=$('searchForm'),out=$('results'),q=$('q'),city=$('city'),state=$('state'),review=$('credentialStatus'),issuer=$('issuer'),type=$('credentialType');
-  const states=new Set([...state.options].map(o=>o.value).filter(Boolean));
+  const stateNames=Object.fromEntries(('AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|FL:Florida|GA:Georgia|HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|LA:Louisiana|ME:Maine|MD:Maryland|MA:Massachusetts|MI:Michigan|MN:Minnesota|MS:Mississippi|MO:Missouri|MT:Montana|NE:Nebraska|NV:Nevada|NH:New Hampshire|NJ:New Jersey|NM:New Mexico|NY:New York|NC:North Carolina|ND:North Dakota|OH:Ohio|OK:Oklahoma|OR:Oregon|PA:Pennsylvania|RI:Rhode Island|SC:South Carolina|SD:South Dakota|TN:Tennessee|TX:Texas|UT:Utah|VT:Vermont|VA:Virginia|WA:Washington|WV:West Virginia|WI:Wisconsin|WY:Wyoming|DC:District of Columbia').split('|').map(pair=>pair.split(':')));
+  const stateAliases=Object.entries(stateNames).flatMap(([code,name])=>[[code.toLowerCase(),code],[name.toLowerCase(),code]]).sort((a,b)=>b[0].length-a[0].length);
+  for(const o of state.options){const code=o.value;if(stateNames[code]){o.value=code;o.textContent=stateNames[code]+' ('+code+')';}}
+  function locationQuery(value){
+    const normalized=value.replace(/\s+/g,' '),lower=normalized.toLowerCase();
+    const exact=stateAliases.find(([alias])=>lower===alias);if(exact)return {state:exact[1],city:''};
+    for(const [alias,code] of stateAliases){if(lower.endsWith(' '+alias)||lower.endsWith(','+alias)){const town=normalized.slice(0,-alias.length).replace(/[,\s]+$/,'');if(town)return {state:code,city:town};}}
+    return null;
+  }
   const radiusBox=el('div');radiusBox.append(el('label','Radius'));radiusBox.firstChild.htmlFor='radius';
   const radius=el('select');radius.id='radius';[10,25,50,75,100].forEach(n=>{const o=el('option',n+' miles');o.value=String(n);radius.append(o);});radius.value='25';radiusBox.append(radius);state.parentElement.after(radiusBox);
   const quick=el('label',undefined,'verified-filter'),checkbox=el('input');checkbox.type='checkbox';checkbox.id='verifiedOnly';
   quick.append(checkbox,document.createTextNode(' Show only professionals with verified credentials'));form.querySelector('.primarySearch').append(quick);
   const reset=el('button','Clear search and filters','btn alt');reset.type='button';reset.id='clearSearch';form.append(reset);
   q.maxLength=120;city.maxLength=120;review.options[1].textContent='Only professionals with verified credentials';
+  form.querySelector('label[for="q"]').textContent='ZIP, city and state, state, company, or professional';
+  q.placeholder='New Jersey, Newark NJ, 07102, or a company / person';
+  form.querySelector('.primarySearch .small').textContent='Examples: New Jersey · Newark, NJ · 78701 · Hill Country Sweeps · James Laut';
   ['NFI Woodburning Specialist','NFI Gas Specialist','NFI Pellet Specialist','NFI Hearth Design Specialist','NFI Master Hearth Professional'].forEach(name=>{const o=el('option',name);o.value=name;type.append(o);});
   let active=null,sequence=0,rows=[],meta={},params=new URLSearchParams(),tab='professionals',page=1;
   const PAGE_SIZE=12;
@@ -21,10 +32,9 @@
   }
   function queryParams(){
     const p=new URLSearchParams({view:'companies',radius:radius.value}),value=q.value.trim();
-    // Explicit city + two-letter state queries are location searches, not company text.
-    const place=value.match(/^(.+?)[,\s]+([a-z]{2})$/i);
+    const place=locationQuery(value);
     if(/^\d{5}$/.test(value))p.set('zip',value);
-    else if(place&&states.has(place[2].toUpperCase())&&!city.value.trim()&&!state.value){p.set('city',place[1].replace(/,$/,'').trim());p.set('state',place[2].toUpperCase());}
+    else if(place){state.value=place.state;city.value=place.city;form.querySelector('.advanced').open=true;}
     else if(value)p.set('q',value);
     if(city.value.trim())p.set('city',city.value.trim());if(state.value)p.set('state',state.value);
     if(checkbox.checked)p.set('verified','1');if(issuer.value)p.set('issuer',issuer.value);if(type.value)p.set('credential_type',type.value);
@@ -59,7 +69,8 @@
     const list=tab==='professionals'?people:rows,pages=Math.max(1,Math.ceil(list.length/PAGE_SIZE));page=Math.min(page,pages);saveUrl(replace);
     out.replaceChildren();
     const summary=el('section',undefined,'guide searchSummary'),place=meta.resolved_location;
-    summary.append(el('h2',place?[place.city,place.state].join(', '):[params.get('q')||params.get('zip'),params.get('city'),params.get('state')].filter(Boolean).join(' · ')||'Filtered directory results'));
+    summary.append(el('h2',place?[place.city,place.state].filter(Boolean).join(', '):[params.get('q')||params.get('zip'),params.get('city'),stateNames[params.get('state')]||params.get('state')].filter(Boolean).join(' · ')||'Filtered directory results'));
+    if(params.has('state'))summary.append(el('p','Location restricted to '+stateNames[params.get('state')]+(params.has('city')?' — '+params.get('city'):'')+'. Matches require a business location or recorded service area here.','small'));
     summary.append(el('p',people.length+' named professionals with credential records · '+current.length+' with currently verified credentials · '+rows.length+' company discovery records'));
     if(params.has('zip'))summary.append(el('p','Requested radius: '+params.get('radius')+' miles. Published service-area matches may also be included.','small'));
     summary.append(el('p',meta.coverage_notice||'Coverage varies by location and is not comprehensive.','small'));out.append(summary);

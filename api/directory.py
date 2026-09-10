@@ -13,6 +13,35 @@ NATIONAL_COMPANIES=os.path.join(ROOT,'data','national-directory.json')
 ZIP_CENTROIDS=os.path.join(ROOT,'data','us-zcta-centroids.tsv')
 PUBLISHED_STATUS='verified'
 ALLOWED_RADII={10,25,50,75,100}
+US_STATES=dict(pair.split(':') for pair in (
+  'AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|FL:Florida|GA:Georgia|'
+  'HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|LA:Louisiana|ME:Maine|MD:Maryland|'
+  'MA:Massachusetts|MI:Michigan|MN:Minnesota|MS:Mississippi|MO:Missouri|MT:Montana|NE:Nebraska|NV:Nevada|'
+  'NH:New Hampshire|NJ:New Jersey|NM:New Mexico|NY:New York|NC:North Carolina|ND:North Dakota|OH:Ohio|OK:Oklahoma|'
+  'OR:Oregon|PA:Pennsylvania|RI:Rhode Island|SC:South Carolina|SD:South Dakota|TN:Tennessee|TX:Texas|UT:Utah|'
+  'VT:Vermont|VA:Virginia|WA:Washington|WV:West Virginia|WI:Wisconsin|WY:Wyoming|DC:District of Columbia'
+).split('|'))
+
+def normalize_state(value):
+    value=' '.join(str(value or '').strip().split()).casefold()
+    return next((code for code,name in US_STATES.items() if value in (code.lower(),name.lower())), '')
+
+def normalize_location_query(q='',city='',state=''):
+    """Recognized locations are hard constraints, never a nationwide text search."""
+    q=' '.join(q.strip().split());city=city.strip()
+    code=normalize_state(state)
+    if state and not code:raise ValueError('Choose a valid U.S. state name or abbreviation.')
+    parsed=normalize_state(q);parsed_city=''
+    if not parsed:
+        for alias,target in sorted([(v,k) for k,v in US_STATES.items()]+list((k,k) for k in US_STATES),key=lambda item:len(item[0]),reverse=True):
+            match=re.fullmatch(r'(.+?)[,\s]+'+re.escape(alias),q,re.I)
+            if match:parsed=target;parsed_city=match[1].rstrip(',').strip();break
+    if parsed:
+        if code and code!=parsed:raise ValueError('The search location and State filter disagree. Choose one state.')
+        if city and parsed_city and city.casefold()!=parsed_city.casefold():raise ValueError('The search location and City filter disagree. Choose one city.')
+        return '',parsed_city or city,parsed
+    return q,city,code
+
 PRIVATE_DIRECTORY_FIELDS={
   'notes_internal','internal_notes','identity_document','identity_document_url',
   'email_private','phone_private','private_evidence','reviewer_notes','admin_notes'
@@ -390,9 +419,12 @@ def static_status(item):
     return ('VERIFICATION NEEDED','This record requires an updated official-source verification.')
 
 def search_static(zipcode,q='',radius=25):
+    q,city,state=normalize_location_query(q)
     points=zip_centroids();origin=points.get(zipcode);rows=[];needle=clean(q,120).lower()
     for source in static_records():
         item=dict(source)
+        if state and normalize_state(item.get('state'))!=state:continue
+        if city and clean(item.get('city'),120).casefold()!=city.casefold():continue
         if needle and needle not in ' '.join(clean(item.get(k),200).lower() for k in ('holder','company','city','state')).lower():continue
         distance=None;target=points.get(clean(item.get('zip'),5))
         if origin and target:
@@ -502,7 +534,7 @@ def service_locations_for(item,fallback_state=''):
     for value in item.get('service_locations') or []:
         if not isinstance(value,dict):continue
         if clean(value.get('evidence_status'),40).lower() not in ('','active'):continue
-        city=clean(value.get('city'),120);state=clean(value.get('state'),40) or fallback_state
+        city=clean(value.get('city'),120);state=normalize_state(value.get('state') or fallback_state)
         if not city:continue
         key=(city.lower(),state.lower())
         if key not in seen:rows.append({'city':city,'state':state});seen.add(key)
@@ -604,6 +636,7 @@ def review_signals(source,domain_index,phone_index):
     return signals
 
 def search_static_companies(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type=''):
+    q,city,state=normalize_location_query(q,city,state)
     groups={};needle=clean(q,120).lower();needle_tokens=[part for part in re.split(r'[^a-z0-9]+',needle) if part];city_needle=clean(city,120).lower();state_needle=clean(state,40).lower();issuer_needle=clean(issuer,100).lower();credential_needle=clean(credential_type,200).lower();points=zip_centroids();origin=points.get(zipcode)
     company_sources=[*static_company_records(),*national_company_records()]
     domain_index,phone_index=data_quality_indexes(company_sources)
@@ -613,7 +646,7 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
         same_company_state=any(existing[0]==identity[0] and existing[3] and existing[3]==identity[3] for existing in known)
         if identity not in known and not same_company_state:company_sources.append(person);known.add(identity)
     for source in company_sources:
-        company=clean(source.get('company'),200);company_city=clean(source.get('city') or source.get('hq_city'),120);company_state=clean(source.get('state') or source.get('hq_state'),40);company_zip=clean(source.get('zip') or source.get('postal_code'),5)
+        company=clean(source.get('company'),200);company_city=clean(source.get('city') or source.get('hq_city'),120);company_state=normalize_state(source.get('state') or source.get('hq_state'));company_zip=clean(source.get('zip') or source.get('postal_code'),5)
         if clean(source.get('id'),160).startswith('national-') and not (source.get('website') or source.get('sources')):continue
         reviewed_professionals=reviewed_professionals_for_company(company,company_city,company_state,company_zip)
         if issuer_needle or credential_needle:
@@ -750,6 +783,7 @@ def directory_target_exists(target_type,target_id):
     return False
 
 def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type='',company_id=None):
+    q,city,state=normalize_location_query(q,city,state)
     fallback=search_static_companies(zipcode,q,city,state,verified_only,radius,issuer,credential_type)
     context_fallback=fallback
     if company_id is not None:fallback=[item for item in fallback if str(item.get('id'))==str(company_id)]
@@ -768,11 +802,19 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
             where.append('''(c.postal_code=%s OR EXISTS (
               SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.postal_code=%s
             ))''');params.extend([zipcode,zipcode])
-        if city:
-            where.append('''(c.city ILIKE %s OR EXISTS (
-              SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND sa.city ILIKE %s
-            ))''');params.extend([city,city])
-        if state:where.append('UPPER(c.state)=UPPER(%s)');params.append(state)
+        if city or state:
+            office=[];service=[];office_params=[];service_params=[]
+            if city:
+                office.append('LOWER(TRIM(c.city))=LOWER(%s)');office_params.append(city)
+                service.append('LOWER(TRIM(sa.city))=LOWER(%s)');service_params.append(city)
+            if state:
+                # City and state must belong to the SAME office/service-area row.
+                office.append('UPPER(TRIM(c.state))=ANY(%s)');office_params.append([state,US_STATES[state].upper()])
+                service.append('UPPER(TRIM(sa.state))=ANY(%s)');service_params.append([state,US_STATES[state].upper()])
+            service.append("COALESCE(NULLIF(TRIM(sa.source_url),''),NULLIF(TRIM(sa.source_reference),'')) IS NOT NULL")
+            service.append("sa.evidence_status='active'")
+            where.append('(('+' AND '.join(office)+') OR EXISTS (SELECT 1 FROM directory_service_areas sa WHERE sa.company_id=c.id AND '+' AND '.join(service)+'))')
+            params.extend(office_params+service_params)
         if verified_only:
             where.append('''EXISTS (SELECT 1 FROM directory_professionals p JOIN directory_credentials cr ON cr.professional_id=p.id
               WHERE p.company_id=c.id AND p.public_state='active'
@@ -824,8 +866,9 @@ def credential_record_key(record):
     return tuple(clean(record.get(k),200).casefold() for k in ('holder','company','issuer'))+(clean(record.get('credential_type') or record.get('credential'),200).casefold(),)
 
 def search_db(zipcode,q='',radius=25):
+    original_q=q;q,city,state=normalize_location_query(q)
     conn=dbconn()
-    if not conn:return search_static(zipcode,q,radius)
+    if not conn:return search_static(zipcode,original_q,radius)
     try:
         ensure(conn)
         with conn.cursor() as cur:
@@ -833,6 +876,8 @@ def search_db(zipcode,q='',radius=25):
             if zipcode:
                 cur.execute('SELECT latitude,longitude FROM zip_centroids WHERE postal_code=%s',(zipcode,));origin=cur.fetchone()
             params=[];where=['status=%s'];params.append(PUBLISHED_STATUS)
+            if state:where.append('UPPER(TRIM(state))=ANY(%s)');params.append([state,US_STATES[state].upper()])
+            if city:where.append('LOWER(TRIM(city))=LOWER(%s)');params.append(city)
             if q:
                 where.append('(company ILIKE %s OR professional_name ILIKE %s OR city ILIKE %s)');like=f'%{q}%';params.extend([like,like,like])
             distance_sql='NULL::double precision'
@@ -858,7 +903,7 @@ def search_db(zipcode,q='',radius=25):
                 if label!='CREDENTIAL VERIFIED':continue
                 if item['distance'] is not None:item['distance']=round(float(item['distance']),1)
                 rows.append(item)
-            fallback,fallback_geo=search_static(zipcode,q,radius)
+            fallback,fallback_geo=search_static(zipcode,original_q,radius)
             rows.extend(r for r in fallback if credential_record_key(r) not in seen)
             rows.sort(key=lambda r:(r.get('holder',''),r.get('company',''),r.get('credential','')))
             return rows,bool(origin) or fallback_geo
@@ -1150,6 +1195,8 @@ class handler(BaseHTTPRequestHandler):
                 except (ValueError,TypeError):return self.sendj(400,{'error':'Choose a supported search radius.'})
                 if z and not valid_zip(z):return self.sendj(400,{'error':'Enter a valid 5-digit ZIP code.'})
                 if radius not in ALLOWED_RADII:return self.sendj(400,{'error':'Choose a supported search radius.'})
+                try:q,city,state=normalize_location_query(q,city,state)
+                except ValueError as error:return self.sendj(400,{'error':str(error)})
                 if not any((z,q,city,state,verified_only,issuer,credential_type)):return self.sendj(400,{'error':'Search by ZIP, city, state, business name, professional name, or reviewed credential record.'})
                 results,connected=search_companies_db(z,q,city,state,verified_only,radius,issuer,credential_type)
                 resolved=resolve_us_zip(z) if z and not (city or state) else None

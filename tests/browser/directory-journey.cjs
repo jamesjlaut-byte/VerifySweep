@@ -49,6 +49,20 @@ async function run(){
   await page.getByRole('link',{name:'Back to Search',exact:true}).click();await page.locator('.company-result').first().waitFor();assert.equal(new URL(page.url()).searchParams.get('page'),'2');
   await page.locator('#verifiedOnly').check();await page.getByRole('button',{name:'Professionals (26)',exact:true}).waitFor();assert.equal(requests.at(-1).searchParams.get('verified'),'1');
   await page.locator('#clearSearch').click();assert.equal(new URL(page.url()).search,'');assert.equal(await page.locator('#q').inputValue(),'');
+  // Every state name and abbreviation must send a geographic constraint.
+  const stateOptions=await page.locator('#state option').evaluateAll(options=>options.filter(o=>o.value).map(o=>({code:o.value,name:o.textContent.replace(/ \([A-Z]{2}\)$/,'')})));
+  assert.equal(stateOptions.length,51);
+  for(const {code,name} of stateOptions){for(const value of [name,code.toLowerCase()]){
+    await page.locator('#q').fill(value);await page.getByRole('button',{name:'FIND & VERIFY',exact:true}).click();
+    await page.waitForFunction(code=>new URL(location.href).searchParams.get('state')===code&&document.getElementById('results').getAttribute('aria-busy')!=='true',code);
+    assert.equal(requests.at(-1).searchParams.get('state'),code);assert.equal(requests.at(-1).searchParams.has('q'),false);assert.equal(requests.at(-1).searchParams.has('city'),false);
+  }}
+  for(const value of ['Newark, New Jersey','Newark NJ','Newark,nj']){
+    await page.locator('#q').fill(value);await page.getByRole('button',{name:'FIND & VERIFY',exact:true}).click();
+    await page.waitForFunction(()=>new URL(location.href).searchParams.get('city')==='Newark'&&document.getElementById('results').getAttribute('aria-busy')!=='true');
+    assert.equal(requests.at(-1).searchParams.get('state'),'NJ');assert.equal(requests.at(-1).searchParams.get('city'),'Newark');
+  }
+  await page.locator('#clearSearch').click();
   mode='error';await page.locator('#q').fill('Austin');await page.getByRole('button',{name:'FIND & VERIFY',exact:true}).click();await page.getByRole('heading',{name:'Directory search could not be completed.'}).waitFor();
   mode='empty';await page.getByRole('button',{name:'FIND & VERIFY',exact:true}).click();await page.getByRole('heading',{name:'No matching professional credential records are currently on file.'}).waitFor();
   mode='normal';await page.locator('#q').fill('slow');await page.getByRole('button',{name:'FIND & VERIFY',exact:true}).click();await page.locator('#q').fill('latest');await page.getByRole('button',{name:'FIND & VERIFY',exact:true}).click();await page.locator('.professional-result').first().waitFor();await page.waitForTimeout(250);assert.match(await page.locator('.searchSummary').innerText(),/latest/);
