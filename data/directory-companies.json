@@ -4,6 +4,38 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "id": "business-traditional-sweep-portsmouth-ri",
+      "company": "A Traditional Sweep, LLC",
+      "website": "https://www.atraditionalsweep.net/",
+      "phone": "(401) 682-2900",
+      "city": "Portsmouth",
+      "state": "RI",
+      "postal_code": "02871",
+      "public_status": "unverified",
+      "service_locations": [{"city":"Barrington","state":"RI"},{"city":"Bristol","state":"RI"},{"city":"East Providence","state":"RI"},{"city":"Jamestown","state":"RI"},{"city":"Little Compton","state":"RI"},{"city":"Middletown","state":"RI"},{"city":"Newport","state":"RI"},{"city":"Portsmouth","state":"RI"},{"city":"Riverside","state":"RI"},{"city":"Rumford","state":"RI"},{"city":"Tiverton","state":"RI"},{"city":"Warren","state":"RI"},{"city":"Assonet","state":"MA"},{"city":"Dartmouth","state":"MA"},{"city":"Fall River","state":"MA"},{"city":"Freetown","state":"MA"},{"city":"Rehoboth","state":"MA"},{"city":"Seekonk","state":"MA"},{"city":"Somerset","state":"MA"},{"city":"Swansea","state":"MA"},{"city":"Westport","state":"MA"}],
+      "source_type": "official_business_website",
+      "source_url": "https://www.atraditionalsweep.net/contact.html",
+      "service_area_source_url": "https://www.atraditionalsweep.net/",
+      "captured_at": "2026-09-10T03:00:00Z",
+      "source_note": "Company-owned website publishes a Portsmouth, Rhode Island business address, phone number, and named Rhode Island and Massachusetts service communities. Company certification statements are not converted into individual credentials."
+    },
+    {
+      "id": "business-granite-flue-rapid-city-sd",
+      "company": "Granite Flue",
+      "website": "https://graniteflue.com/",
+      "phone": "(605) 646-4681",
+      "city": "Rapid City",
+      "state": "SD",
+      "postal_code": "57701",
+      "public_status": "unverified",
+      "service_locations": [{"city":"Rapid City","state":"SD"},{"city":"Box Elder","state":"SD"},{"city":"Sturgis","state":"SD"}],
+      "source_type": "official_business_website",
+      "source_url": "https://graniteflue.com/",
+      "service_area_source_url": "https://graniteflue.com/locations/",
+      "captured_at": "2026-09-10T03:00:00Z",
+      "source_note": "Company-owned website publishes a Rapid City, South Dakota business phone and explicitly names Rapid City, Box Elder, and Sturgis as service towns. No individual credential has been verified for this record."
+    },
+    {
       "id": "business-somerset-stone-stove-oakland-me",
       "company": "Somerset Stone & Stove",
       "website": "https://www.chimneycleaningmaine.com/",
