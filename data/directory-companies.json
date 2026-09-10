@@ -4,6 +4,38 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "id": "business-aurora-chimney-alaska",
+      "company": "Aurora Chimney Services of Alaska",
+      "website": "https://aurorachimneyservices.com/",
+      "phone": "(907) 210-0728",
+      "city": "Wasilla",
+      "state": "AK",
+      "postal_code": "",
+      "public_status": "unverified",
+      "service_areas": ["Wasilla", "Anchorage"],
+      "source_type": "official_business_website",
+      "source_url": "https://aurorachimneyservices.com/",
+      "service_area_source_url": "https://aurorachimneyservices.com/",
+      "captured_at": "2026-09-10T02:17:44Z",
+      "source_note": "Company-owned website identifies Wasilla as its base, publishes a business phone, and names Anchorage among its service locations. Regional Mat-Su and Kenai Peninsula claims were not expanded into unnamed cities. No individual credential has been verified for this record."
+    },
+    {
+      "id": "business-village-chimney-freedom-wy",
+      "company": "Village Chimney Sweep",
+      "website": "https://villagechimneysweep.net/",
+      "phone": "(307) 880-4351",
+      "city": "Freedom",
+      "state": "WY",
+      "postal_code": "83120",
+      "public_status": "unverified",
+      "service_areas": ["Freedom"],
+      "source_type": "official_business_website",
+      "source_url": "https://villagechimneysweep.net/",
+      "service_area_source_url": "https://villagechimneysweep.net/",
+      "captured_at": "2026-09-10T02:17:44Z",
+      "source_note": "Company-owned website publishes Freedom, Wyoming business contact information and chimney services. Unnamed surrounding areas were not expanded. No individual credential has been verified for this record."
+    },
+    {
       "company": "Anthony's Chimney Sweep",
       "website": "https://www.anthonyschimneysweep.com/",
       "phone": "(719) 650-7165",
