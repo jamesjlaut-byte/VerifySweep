@@ -422,6 +422,7 @@ def detail_static(identifier):
                 credential['display_status'],credential['status_note']=static_status(candidate);credentials.append(credential)
             item['credentials']=sorted(credentials,key=lambda value:(clean(value.get('issuer'),100),clean(value.get('credential_type') or value.get('credential'),200)))
             item['industry_leader']=industry_leader_for(item)
+            item['company_record_id']=listed_company_record_id(item)
             return public_directory_record(item)
     return None
 
@@ -654,6 +655,8 @@ def search_static_companies(zipcode='',q='',city='',state='',verified_only=False
           'verified_professional_count':len({person['holder'] for person in reviewed_professionals if person.get('display_status')=='CREDENTIAL VERIFIED'}),'verified_affiliation_count':sum(1 for person in reviewed_professionals if person.get('company_affiliation_status')=='VERIFIED'),'verification_scope':clean(source.get('verification_scope'),120),
           'verification_note':clean(source.get('verification_note'),600)
         })
+        alias=clean(source.get('id'),160)
+        if alias and alias not in item.setdefault('record_aliases',[]):item['record_aliases'].append(alias)
         incoming_signals=review_signals(source,domain_index,phone_index)
         if incoming_signals:
             merged={json.dumps(value,sort_keys=True):value for value in [*(item.get('data_quality_signals') or []),*incoming_signals]}
@@ -717,10 +720,24 @@ def company_professionals(company):
         item['display_status'],item['status_note']=static_status(source);rows.append(item)
     return sorted(rows,key=lambda item:(clean(item.get('holder'),200),clean(item.get('credential'),200)))
 
+def listed_company_record_id(person):
+    """Link an unambiguous listed company, without asserting verified employment."""
+    name=clean(person.get('company'),200)
+    if not name:return None
+    matches=[item for item in search_static_companies(q=name,state=clean(person.get('state'),40))
+      if clean(item.get('company'),200).casefold()==name.casefold()]
+    return matches[0]['id'] if len(matches)==1 else None
+
 def detail_company(identifier):
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,160}',identifier or ''):return None,False
-    rows,connected=search_companies_db()
-    company=next((item for item in rows if str(item.get('id'))==str(identifier)),None)
+    if identifier.isdigit():
+        if int(identifier)>9223372036854775807:return None,False
+        rows,connected=search_companies_db(company_id=int(identifier))
+    else:
+        # Static IDs must remain addressable even when a database record replaces
+        # the matching search card or another source supplies its canonical ID.
+        rows=search_static_companies();connected=False
+    company=next((item for item in rows if str(item.get('id'))==str(identifier) or identifier in item.get('record_aliases',[])),None)
     if not company:return None,connected
     company=dict(company);company['professionals']=company_professionals(company)
     return company,connected
@@ -732,13 +749,16 @@ def directory_target_exists(target_type,target_id):
         result,_=detail_company(target_id);return bool(result)
     return False
 
-def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type=''):
+def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,radius=25,issuer='',credential_type='',company_id=None):
     fallback=search_static_companies(zipcode,q,city,state,verified_only,radius,issuer,credential_type)
+    context_fallback=fallback
+    if company_id is not None:fallback=[item for item in fallback if str(item.get('id'))==str(company_id)]
     conn=dbconn()
     if not conn:return fallback,False
     try:
         ensure(conn)
         where=['c.public_status=ANY(%s)'];params=[list(PUBLIC_COMPANY_STATUSES)]
+        if company_id is not None:where.append('c.id=%s');params.append(company_id)
         if q:
             where.append('''(c.canonical_name ILIKE %s OR COALESCE(c.normalized_domain,'') ILIKE %s OR COALESCE(c.city,'') ILIKE %s OR COALESCE(c.state,'') ILIKE %s OR COALESCE(c.postal_code,'') ILIKE %s OR EXISTS (
               SELECT 1 FROM directory_professionals p WHERE p.company_id=c.id AND p.professional_name ILIKE %s
@@ -782,9 +802,13 @@ def search_companies_db(zipcode='',q='',city='',state='',verified_only=False,rad
                 item['verified_affiliation_count']=sum(1 for person in item['reviewed_professionals'] if person.get('company_affiliation_status')=='VERIFIED')
                 item['company_identity_status']='UNKNOWN';item['contact_consistency_status']='NOT REVIEWED';item['profile_claim_status']=clean(item.get('claim_status'),60).upper() or 'UNCLAIMED'
                 if not (issuer or credential_type) or item['reviewed_professionals']:rows.append(item)
-            fallback_by_key={company_key(item):item for item in fallback}
+            fallback_by_key={company_key(item):item for item in context_fallback}
             for item in rows:
                 matched=fallback_by_key.get(company_key(item),{})
+                # Preserve separately attributed service-area evidence and public
+                # research context when the database owns the company identity.
+                for field in ('service_areas','service_locations','service_area_labels','service_counties','service_area_source_url','sources','source_url','company_claims','professional_candidates','record_aliases'):
+                    if matched.get(field) and not item.get(field):item[field]=matched[field]
                 for field in ('match_rank','match_reason','matched_service_area','matched_service_state','distance'):
                     if matched.get(field) is not None:item[field]=matched[field]
                 if item.get('match_rank') is None:item['match_rank']=8;item['match_reason']='Directory match'
@@ -856,6 +880,7 @@ def detail_db(identifier):
             item['identity_status']=clean(item.get('identity_status'),60).upper() or 'UNKNOWN'
             item['company_affiliation_status']=clean(item.get('company_affiliation_status'),60).upper() or 'UNKNOWN'
             item['credentials']=[{k:item.get(k) for k in ('id','credential','credential_type','credential_number','expiration_date','issuer','source','verified_at','last_checked_at','recheck_due_at','source_available','source_note','display_status','status_note')}]
+            item['company_record_id']=listed_company_record_id(item)
             return item
     finally:conn.close()
 

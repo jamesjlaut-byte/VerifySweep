@@ -11,10 +11,10 @@ directory=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(director
 
 class UnifiedDirectoryTests(unittest.TestCase):
     def test_find_a_pro_keeps_company_distance_attached_to_company_cards(self):
-        page=(ROOT/'find-a-pro.html').read_text()
+        page=(ROOT/'assets/directory-search.js').read_text()+(ROOT/'assets/directory-ui.js').read_text()
         self.assertIn("'result company-result'",page)
         self.assertIn("'result professional-result personResult'",page)
-        self.assertIn("querySelectorAll(':scope > .company-result')",page)
+        self.assertIn('companyCard(c)',page)
         self.assertNotIn("document.querySelectorAll('.result').forEach",page)
 
     def test_find_a_pro_mobile_status_css_uses_valid_media_query(self):
@@ -129,7 +129,7 @@ class UnifiedDirectoryTests(unittest.TestCase):
     def test_database_company_path_uses_same_trust_sort_function(self):
         source=(ROOT/'api'/'directory.py').read_text()
         self.assertIn('rows.sort(key=company_trust_key)',source)
-        self.assertIn('fallback_by_key={company_key(item):item for item in fallback}',source)
+        self.assertIn('fallback_by_key={company_key(item):item for item in context_fallback}',source)
 
     def test_shared_contact_signals_are_neutral_review_indicators(self):
         records=[{'company':'Alpha Chimney','website':'https://alpha.example/','phone':'(555) 111-2222'},{'company':'Beta Chimney','website':'https://beta.example/','phone':'555-111-2222'}]
@@ -318,17 +318,17 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertEqual(longest['holder'],'Scott Imgarten')
 
     def test_search_and_profile_pages_link_to_named_professionals(self):
-        search=(ROOT/'find-a-pro.html').read_text()
+        search=(ROOT/'find-a-pro.html').read_text()+(ROOT/'assets/directory-search.js').read_text()+(ROOT/'assets/directory-ui.js').read_text()
         profile=(ROOT/'professional-profile.html').read_text()
         company=(ROOT/'company-profile.html').read_text()
         self.assertIn("'View Professional'",search)
         self.assertIn("/professional-profile.html?id=",search)
         self.assertIn('Only professionals with verified credentials',search)
-        self.assertIn('No professional with an independently verified credential',search)
-        self.assertIn('PROFESSIONALS WITH REVIEWED CREDENTIALS',search)
+        self.assertIn('No independently verified professional credential',search)
+        self.assertIn('Individual credentials',search)
         self.assertIn('Verify the person—not just the company',search)
-        self.assertIn('COMPANY DISCOVERY RECORDS',search)
-        self.assertIn("person.credentials[0].id",search)
+        self.assertIn('Companies matching this search',search)
+        self.assertIn("record.id",search)
 
     def test_search_explains_credential_freshness_and_mobile_status_layout(self):
         search=(ROOT/'find-a-pro.html').read_text()
@@ -345,8 +345,9 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('Review due:',profile)
         self.assertIn("'NOT YET REVIEWED'",profile)
         self.assertIn("'LISTED COMPANY'",profile)
-        self.assertIn("value.textContent.trim()==='UNKNOWN'",search)
-        self.assertIn("'Listed company: '+companyLine.textContent",search)
+        presentation=(ROOT/'assets/directory-ui.js').read_text()
+        self.assertIn("norm(c.identity_status)==='verified'",presentation)
+        self.assertIn("'Listed company: '+person.company.company",presentation)
         self.assertIn("'REPORT A PROBLEM'",profile)
         self.assertIn("'CLAIM THIS PROFILE'",profile)
         self.assertIn("'SUBMIT CREDENTIAL EVIDENCE'",profile)
@@ -365,14 +366,15 @@ class UnifiedDirectoryTests(unittest.TestCase):
         self.assertIn('does not automatically remove a listing',report)
         self.assertIn("action:'claim_profile'",claim)
         self.assertIn('A claim is not verification.',claim)
-        self.assertIn("'View Professional'",company)
+        self.assertIn("'View Professional'",presentation)
+        self.assertIn('VerifySweepDirectoryUI.personCard',company)
         self.assertIn("'REPORT A PROBLEM'",company)
         self.assertIn("'CLAIM THIS PROFILE'",company)
         self.assertIn('/report-directory-problem.html',profile)
         self.assertIn('/report-directory-problem.html',company)
         self.assertIn('COMPANY TRUST FACTS',company)
         self.assertIn('Verified professional affiliations',company)
-        self.assertIn('Company affiliation:',company)
+        self.assertIn('Company affiliation verified',presentation)
 
     def test_professional_detail_does_not_infer_identity_or_affiliation(self):
         detail=directory.detail_static('ncsg-paul-robison-journeyman')

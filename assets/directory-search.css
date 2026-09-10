@@ -1,0 +1,12 @@
+.verified-filter{display:flex;gap:10px;align-items:center;margin-top:18px;cursor:pointer}
+.verified-filter input{width:22px;height:22px;flex:0 0 auto;accent-color:#f36b10}
+#clearSearch{margin-top:12px}
+.searchGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.result-switch{margin:22px 0}
+.result-switch [aria-pressed=true]{outline:2px solid #101010;outline-offset:3px}
+.pagination{align-items:center;margin:24px 0}
+.pagination button:disabled{opacity:.45;cursor:default}
+.result summary{cursor:pointer;font-weight:800;padding:10px 0}
+.credential-detail p{margin:6px 0}
+.result,.pro{overflow-wrap:anywhere}
+@media(max-width:800px){.searchGrid{grid-template-columns:1fr}.result-switch .btn{flex:1}.result-switch{gap:12px}}
