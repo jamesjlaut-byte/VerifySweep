@@ -937,7 +937,21 @@ def list_reports_db(status='pending',after_id=0):
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
 
-def list_reverification_queue_db():
+def reverification_cursor(value):
+    if value=='0':return ('',0)
+    match=re.fullmatch(r'(legacy|normalized):([1-9]\d{0,18})',value)
+    if not match or int(match[2])>9223372036854775807:
+        raise ValueError('Choose a valid reverification page.')
+    return match[1],int(match[2])
+
+def reverification_page(rows):
+    page=rows[:250]
+    return {'records':page,'count':len(page),
+      'next_cursor':page[-1]['source_record']+':'+str(page[-1]['credential_id']) if len(rows)>250 else None,
+      'scope':'expired, overdue, disputed, temporarily unverifiable, or invalid verification-date credential records'}
+
+def list_reverification_queue_db(after='0'):
+    source,identifier=reverification_cursor(after)
     conn=dbconn()
     if not conn:raise RuntimeError('Directory database is not configured.')
     try:
@@ -974,8 +988,9 @@ def list_reverification_queue_db():
                   AND (expiration_date<CURRENT_DATE OR recheck_due_at<=now() OR source_available=FALSE
                     OR verified_at IS NULL OR verified_at>now() OR source_last_checked_at>now())
               ) due_records
-              ORDER BY COALESCE(recheck_due_at,expiration_date::timestamptz) ASC NULLS FIRST,professional_name
-              LIMIT 250''')
+              WHERE (source_record,credential_id::bigint)>(%s,%s)
+              ORDER BY source_record,credential_id::bigint
+              LIMIT 251''',(source,identifier))
             keys=['source_record','credential_id','professional_id','professional_name','company','issuer','credential_type','official_source_url','verified_at','last_checked_at','expiration_date','recheck_due_at','review_reason']
             return [rowdict(keys,row) for row in cur.fetchall()]
     finally:conn.close()
@@ -1096,7 +1111,10 @@ class handler(BaseHTTPRequestHandler):
                 submissions=list_pending_submissions_db(status,after_id);return self.sendj(200,review_page(submissions,'submissions',status,250),include_private=True)
             if view=='admin_reverification':
                 if not admin_authorized(self.headers):return self.sendj(403,{'error':'Administrative authorization required.'})
-                records=list_reverification_queue_db();return self.sendj(200,{'records':records,'count':len(records),'scope':'expired, overdue, disputed, temporarily unverifiable, or invalid verification-date credential records'})
+                cursor=(qs.get('after') or ['0'])[0]
+                try:reverification_cursor(cursor)
+                except ValueError as error:return self.sendj(400,{'error':str(error)})
+                records=list_reverification_queue_db(cursor);return self.sendj(200,reverification_page(records))
             if view=='companies':
                 identifier=clean((qs.get('id') or [''])[0],160)
                 if identifier:

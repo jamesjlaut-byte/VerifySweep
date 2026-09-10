@@ -12,6 +12,7 @@
   const requests = new Set();
   const el = (tag, text, cls) => {const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;};
   const label = value => value.replaceAll('_',' ');
+  const validCursor = (value,q) => (q.view==='admin_reverification'?/^(legacy|normalized):[1-9]\d{0,18}$/:/^\d{1,19}$/).test(value);
   function message(text){$('message').textContent=text;}
   function busy(value){loading=value;['queue','status','refresh','nextPage','firstPage'].forEach(id=>$(id).disabled=value||saving);}
   function lock(){cursor='0';nextCursor=null;token='';reviewer='';generation++;requests.forEach(c=>c.abort());requests.clear();$('records').replaceChildren();$('count').textContent='';$('workspace').hidden=true;$('access').hidden=false;$('access').reset();busy(false);message('Review session cleared.');}
@@ -43,7 +44,7 @@
     });return box;
   }
   async function load(){if(!token||saving)return;const epoch=++generation,q=queues[$('queue').value];busy(true);$('nextPage').hidden=true;$('firstPage').hidden=cursor==='0';$('records').replaceChildren();message('Loading private review queue…');
-    try{const data=await request('?view='+q.view+($('status').value?'&status='+encodeURIComponent($('status').value):'')+'&after='+encodeURIComponent(cursor));if(epoch!==generation)return;if(!Array.isArray(data[q.key]))throw new Error('Invalid queue response.');$('workspace').hidden=false;$('access').hidden=true;$('token').value='';nextCursor=data.next_cursor==null?null:String(data.next_cursor);if(nextCursor&&!/^\d{1,19}$/.test(nextCursor))throw new Error('Invalid next-page reference.');$('nextPage').hidden=!nextCursor;$('count').textContent=data[q.key].length+' records on this page'+(nextCursor?' — more records available.':'.')+(q.action?'':' Reverification is limited to the first 250 due records.');$('records').replaceChildren(...data[q.key].map(r=>card(r,q,epoch)));message(data[q.key].length?'Queue loaded. Review source evidence before recording decisions.':'No records in this queue/status.');}
+    try{const data=await request('?view='+q.view+($('status').value?'&status='+encodeURIComponent($('status').value):'')+'&after='+encodeURIComponent(cursor));if(epoch!==generation)return;if(!Array.isArray(data[q.key]))throw new Error('Invalid queue response.');$('workspace').hidden=false;$('access').hidden=true;$('token').value='';nextCursor=data.next_cursor==null?null:String(data.next_cursor);if(nextCursor&&!validCursor(nextCursor,q))throw new Error('Invalid next-page reference.');$('nextPage').hidden=!nextCursor;$('count').textContent=data[q.key].length+' records on this page'+(nextCursor?' — more records available.':'.');$('records').replaceChildren(...data[q.key].map(r=>card(r,q,epoch)));message(data[q.key].length?'Queue loaded. Review source evidence before recording decisions.':'No records in this queue/status.');}
     catch(error){if(epoch===generation||!token)message(error.message);}
     finally{if(epoch===generation)busy(false);}
   }

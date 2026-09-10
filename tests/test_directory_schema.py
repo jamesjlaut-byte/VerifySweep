@@ -176,7 +176,7 @@ class DirectorySchemaTests(unittest.TestCase):
     def test_reverification_queue_is_private_and_covers_expiration_source_and_due_dates(self):
         source=(ROOT/'api'/'directory.py').read_text()
         self.assertIn("view=='admin_reverification'",source)
-        self.assertIn('list_reverification_queue_db()',source)
+        self.assertIn('list_reverification_queue_db(cursor)',source)
         self.assertIn("cr.expiration_date<CURRENT_DATE",source)
         self.assertIn("cr.recheck_due_at<=now()",source)
         self.assertIn("cr.source_available=FALSE",source)
