@@ -4,6 +4,22 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "id": "business-winstons-chimney-arlington-va-dc",
+      "company": "Winston's Chimney Service",
+      "website": "https://www.winstonsservices.com/",
+      "phone": "571-520-3334",
+      "city": "Arlington",
+      "state": "VA",
+      "postal_code": "22201",
+      "public_status": "unverified",
+      "service_locations": [{"city":"Washington","state":"DC"},{"city":"Arlington","state":"VA"},{"city":"McLean","state":"VA"},{"city":"Great Falls","state":"VA"},{"city":"Falls Church","state":"VA"},{"city":"Fairfax","state":"VA"},{"city":"Alexandria","state":"VA"},{"city":"Manassas","state":"VA"}],
+      "source_type": "official_business_website",
+      "source_url": "https://www.winstonsservices.com/",
+      "service_area_source_url": "https://www.winstonsservices.com/service-areas/",
+      "captured_at": "2026-09-10T03:40:00Z",
+      "source_note": "Company-owned website publishes an Arlington, Virginia location, business phone, and explicitly names Washington, DC and nearby Virginia communities in its service area. Company membership or certification statements are not converted into individual credentials."
+    },
+    {
       "id": "business-the-chimney-man-jackson-ms",
       "company": "The Chimney Man",
       "website": "https://www.thechimneyman.net/index.html",

@@ -1,6 +1,6 @@
 # Directory source batch — 2026-09-10
 
-This batch adds three neutral company discovery records to improve location search coverage. It does not create or imply individual credential verification.
+This batch adds four neutral company discovery records to improve location search coverage. It does not create or imply individual credential verification.
 
 ## A Traditional Sweep, LLC — Portsmouth, Rhode Island
 
@@ -21,5 +21,12 @@ This batch adds three neutral company discovery records to improve location sear
 - Source: [company website](https://www.thechimneyman.net/index.html)
 - Named service area: Jackson and Hinds, Madison, and Rankin Counties.
 - Treatment: `unverified`; the website's certification statement is not converted into an individual credential.
+
+## Winston's Chimney Service — Washington, DC area
+
+- Source: [company website](https://www.winstonsservices.com/)
+- Service area: [official service-areas page](https://www.winstonsservices.com/service-areas/)
+- Named service locations: Washington, DC and nearby Virginia communities.
+- Treatment: `unverified`; company membership or certification statements are not converted into individual credentials.
 
 The source URLs should be rechecked before any future verification decision. Listings are discovery records only and are not endorsements.
