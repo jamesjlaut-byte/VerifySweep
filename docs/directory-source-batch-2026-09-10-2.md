@@ -16,4 +16,10 @@ This batch adds two neutral company discovery records to improve location search
 - Named service locations: Rapid City, Box Elder, and Sturgis, South Dakota.
 - Treatment: `unverified`; no individual credential was added.
 
+## The Chimney Man — Jackson, Mississippi
+
+- Source: [company website](https://www.thechimneyman.net/index.html)
+- Named service area: Jackson and Hinds, Madison, and Rankin Counties.
+- Treatment: `unverified`; the website's certification statement is not converted into an individual credential.
+
 The source URLs should be rechecked before any future verification decision. Listings are discovery records only and are not endorsements.

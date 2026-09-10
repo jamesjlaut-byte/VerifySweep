@@ -4,6 +4,22 @@
   "source_policy": "Company discovery records use public business information from the linked source. Inclusion is not verification, certification, endorsement, or a finding about business quality or conduct.",
   "records": [
     {
+      "id": "business-the-chimney-man-jackson-ms",
+      "company": "The Chimney Man",
+      "website": "https://www.thechimneyman.net/index.html",
+      "phone": "(601) 291-7226",
+      "city": "Jackson",
+      "state": "MS",
+      "postal_code": "",
+      "public_status": "unverified",
+      "service_locations": [{"city":"Jackson","state":"MS"},{"city":"Hinds County","state":"MS"},{"city":"Madison County","state":"MS"},{"city":"Rankin County","state":"MS"}],
+      "source_type": "official_business_website",
+      "source_url": "https://www.thechimneyman.net/index.html",
+      "service_area_source_url": "https://www.thechimneyman.net/index.html",
+      "captured_at": "2026-09-10T03:20:00Z",
+      "source_note": "Company-owned website identifies Jackson, Mississippi, publishes a business phone, and names Hinds, Madison, and Rankin Counties as regular service areas. Company credential statements are not converted into individual credentials."
+    },
+    {
       "id": "business-traditional-sweep-portsmouth-ri",
       "company": "A Traditional Sweep, LLC",
       "website": "https://www.atraditionalsweep.net/",
