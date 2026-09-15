@@ -9718,7 +9718,7 @@
     },
     {
       "id": "national-8abc868d01e788",
-      "company": "Chimney Techs, Fireplaces, Stoves & Services",
+      "company": "Chimney Techs",
       "website": null,
       "normalized_domain": null,
       "hq_city": "Jonesboro",
@@ -9759,9 +9759,19 @@
       ],
       "company_claims": [],
       "professional_candidates": [],
-      "sources": [],
+      "sources": [
+        {
+          "url": "https://online.csia.org/csiassa/rflssareferral.query_page?p_vendor_ty=VENDOR",
+          "type": "user_supplied_official_directory_screenshot",
+          "captured_at": "2026-09-15"
+        }
+      ],
       "last_reviewed_at": null,
-      "record_notice": "Company discovery record only. Credential claims are not verified individual credentials."
+      "record_notice": "Company discovery record only. Credential claims are not verified individual credentials.",
+      "source_type": "user_supplied_official_directory_screenshot",
+      "source_url": "https://online.csia.org/csiassa/rflssareferral.query_page?p_vendor_ty=VENDOR",
+      "captured_at": "2026-09-15",
+      "phone": "(870) 301-2060"
     },
     {
       "id": "national-1988420d7f4486",
@@ -21804,9 +21814,18 @@
       ],
       "company_claims": [],
       "professional_candidates": [],
-      "sources": [],
+      "sources": [
+        {
+          "url": "https://online.csia.org/csiassa/rflssareferral.query_page?p_vendor_ty=VENDOR",
+          "type": "user_supplied_official_directory_screenshot",
+          "captured_at": "2026-09-15"
+        }
+      ],
       "last_reviewed_at": null,
-      "record_notice": "Company discovery record only. Credential claims are not verified individual credentials."
+      "record_notice": "Company discovery record only. Credential claims are not verified individual credentials.",
+      "source_type": "user_supplied_official_directory_screenshot",
+      "source_url": "https://online.csia.org/csiassa/rflssareferral.query_page?p_vendor_ty=VENDOR",
+      "captured_at": "2026-09-15"
     },
     {
       "id": "national-ece1845b2d1d82",
